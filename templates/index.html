@@ -350,7 +350,11 @@
 
             try {
                 const res = await fetch(`/analyze?url=${encodeURIComponent(url)}`);
-                if (!res.ok) throw await res.json();
+                if (!res.ok) {
+                    let errData;
+                    try { errData = await res.json(); } catch { errData = { detail: `Error HTTP ${res.status}` }; }
+                    throw errData;
+                }
 
                 const data = await res.json();
                 currentData = data; // Save data
