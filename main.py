@@ -191,48 +191,43 @@ def analyze_video(url: str):
         # Lista de estrategias a intentar en orden de preferencia
         strategies = []
 
+        # 🥇 Estrategia 1: auto sin cookies → funciona para la mayoría de videos públicos
+        # (Descubrimos que cookies expiradas BLOQUEAN el acceso; sin ellas, auto devuelve 31 formatos)
+        strategies.append({
+            **base_ydl_opts,
+            'ignoreerrors': True,
+        })
+
+        # Las siguientes estrategias son fallback para videos con restricción de edad u otros bloqueos
         if YOUTUBE_COOKIES_FILE:
-            # Estrategia 1: tv_embedded + cookies (más común, sin PO Token)
+            # Estrategia 2: tv_embedded + cookies
             strategies.append({
                 **base_ydl_opts,
                 'ignoreerrors': True,
                 'cookiefile': YOUTUBE_COOKIES_FILE,
                 'extractor_args': {'youtube': {'player_client': ['tv_embedded']}},
             })
-            # Estrategia 2: ios + cookies (cliente iOS app, diferente auth)
+            # Estrategia 3: ios + cookies
             strategies.append({
                 **base_ydl_opts,
                 'ignoreerrors': True,
                 'cookiefile': YOUTUBE_COOKIES_FILE,
                 'extractor_args': {'youtube': {'player_client': ['ios']}},
             })
-            # Estrategia 3: android + cookies (cliente Android app)
+            # Estrategia 4: android + cookies
             strategies.append({
                 **base_ydl_opts,
                 'ignoreerrors': True,
                 'cookiefile': YOUTUBE_COOKIES_FILE,
                 'extractor_args': {'youtube': {'player_client': ['android']}},
             })
-            # Estrategia 4: mweb + cookies (cliente móvil web)
+            # Estrategia 5: web + cookies (último recurso con auth)
             strategies.append({
                 **base_ydl_opts,
-                'ignoreerrors': True,
-                'cookiefile': YOUTUBE_COOKIES_FILE,
-                'extractor_args': {'youtube': {'player_client': ['mweb']}},
-            })
-            # Estrategia 5: web + cookies (último con auth)
-            strategies.append({
-                **base_ydl_opts,
-                'ignoreerrors': True,
+                'ignoreerrors': False,
                 'cookiefile': YOUTUBE_COOKIES_FILE,
                 'extractor_args': {'youtube': {'player_client': ['web']}},
             })
-
-        # ── Sin cookies (último recurso absoluto) ────────────────────────────
-        strategies.append({
-            **base_ydl_opts,
-            'ignoreerrors': False,
-        })
 
         info = None
         for i, ydl_opts in enumerate(strategies):
