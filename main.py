@@ -183,8 +183,7 @@ def analyze_video(url: str):
             'ignoreerrors': True,
             'geo_bypass': True,
             'socket_timeout': 20,
-            # Incluir manifiestos DASH (necesarios para 1080p+)
-            'youtube_include_dash_manifest': True,
+            # NO incluir youtube_include_dash_manifest → causaba error 'format not available' en analyze
         }
 
         # Lógica de cliente según disponibilidad de cookies
@@ -335,6 +334,9 @@ def analyze_video(url: str):
                 "original_url": url
             }
 
+    except HTTPException:
+        # Re-lanzar HTTPExceptions sin modificar (no convertirlas en 500)
+        raise
     except Exception as e:
         import traceback
         traceback.print_exc()
