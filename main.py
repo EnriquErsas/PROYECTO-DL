@@ -381,22 +381,16 @@ def download_selected(url: str, format_id: str):
         })
         final_ext = "mp3"
     else:
-        # Descarga de Video MP4 con máxima fidelidad
-        # Descargamos la fuente de mayor bitrate (VP9/AV1 pueden dar 5-12 Mbps en 1080p)
-        # FFmpeg re-codifica a H.264 CRF-18 → calidad near-lossless, compatible con cualquier reproductor
+        # Descarga de Video — Máxima calidad disponible
+        # Usamos merge_output_format: mkv para que FFmpeg acepte cualquier codec (VP9/AV1/H264)
+        # Luego yt-dlp remuxea a MP4 automáticamente
         ydl_opts.update({
-            'format': f"{format_id}+bestaudio[ext=m4a]/bestaudio/best",
-            'merge_output_format': 'mp4',
-            'postprocessor_args': {
-                'ffmpeg': [
-                    '-c:v', 'libx264',       # Re-encode a H.264 (compatible universal)
-                    '-crf', '18',             # Calidad near-lossless (0=lossless, 23=default)
-                    '-preset', 'fast',        # Balance velocidad/calidad óptimo para Railway
-                    '-c:a', 'aac',            # Audio en AAC
-                    '-b:a', '192k',           # 192 kbps audio de alta fidelidad
-                    '-movflags', '+faststart' # MP4 optimizado para reproducción inmediata
-                ]
-            }
+            'format': f"{format_id}+bestaudio[ext=m4a]/{format_id}+bestaudio/best",
+            'merge_output_format': 'mkv',
+            'postprocessors': [{
+                'key': 'FFmpegVideoRemuxer',
+                'preferedformat': 'mp4',
+            }],
         })
         final_ext = "mp4"
 
