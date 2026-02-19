@@ -298,28 +298,13 @@ def analyze_video(url: str):
 
                 resolution_key = f"{height}p"
 
-                if resolution_key in seen_resolutions:
-                    continue
-                seen_resolutions.add(resolution_key)
-
-                # Identificar codec para el label
-                codec_name = "H.264"
-                if 'vp9' in vcodec.lower() or 'vp09' in vcodec.lower():
-                    codec_name = "VP9"
-                elif 'av01' in vcodec.lower() or 'av1' in vcodec.lower():
-                    codec_name = "AV1"
-
-                tbr_val = f.get('tbr') or 0
-                print(f"  [SELECTED] {resolution_key}: format_id={format_id}, codec={codec_name}, tbr={tbr_val}, ext={f.get('ext')}")
-
                 video_formats.append({
                     "format_id": format_id,
                     "extension": "mp4",
                     "resolution": resolution_key,
                     "filesize_str": size_str,
-                    "label": f"{resolution_key} • {codec_name}",
-                    "is_video": True,
-                    "tbr": tbr_val
+                    "label": f"{resolution_key} - MP4",
+                    "is_video": True
                 })
 
         # Ordenar videos por altura (resolución)
@@ -389,16 +374,18 @@ def download_selected(url: str, format_id: str):
         })
         final_ext = "mp3"
     else:
-        # Descarga de Video — Máxima calidad disponible
-        # Usamos merge_output_format: mkv para que FFmpeg acepte cualquier codec (VP9/AV1/H264)
-        # Luego yt-dlp remuxea a MP4 automáticamente
+        # Descarga de Video MP4 - MODO RÁPIDO (Stream Copy)
         ydl_opts.update({
-            'format': f"{format_id}+bestaudio[ext=m4a]/{format_id}+bestaudio/best",
-            'merge_output_format': 'mkv',
-            'postprocessors': [{
-                'key': 'FFmpegVideoRemuxer',
-                'preferedformat': 'mp4',
-            }],
+            'format': f"{format_id}+bestaudio[ext=m4a]/bestaudio/best",
+            'merge_output_format': 'mp4',
+            'postprocessor_args': {
+                'ffmpeg': [
+                    '-c', 'copy',        # Copiar streams sin re-procesar (Ultra rápido)
+                    '-map', '0:v:0',     # Mapear primer video
+                    '-map', '1:a:0',     # Mapear primer audio
+                    '-shortest'
+                ]
+            }
         })
         final_ext = "mp4"
 
