@@ -191,20 +191,36 @@ def analyze_video(url: str):
         # Lista de estrategias a intentar en orden de preferencia
         strategies = []
 
-        # Usamos una lista de clientes que no suelen pedir PO Token
-        # Si uno falla (ej. tv_embedded), yt-dlp prueba el siguiente de la lista (android, ios, mweb)
-        compatible_clients = ['tv_embedded', 'android', 'ios', 'mweb']
-
         if YOUTUBE_COOKIES_FILE:
-            # Estrategia 1: Clientes compatibles + Cookies (EL MEJOR COMBO)
+            # Estrategia 1: tv_embedded + cookies (más común, sin PO Token)
             strategies.append({
                 **base_ydl_opts,
                 'ignoreerrors': True,
                 'cookiefile': YOUTUBE_COOKIES_FILE,
-                'extractor_args': {'youtube': {'player_client': compatible_clients}},
+                'extractor_args': {'youtube': {'player_client': ['tv_embedded']}},
             })
-            
-            # Estrategia 2: Cliente 'web' + Cookies (Solo si lo anterior falla, por si acaso)
+            # Estrategia 2: ios + cookies (cliente iOS app, diferente auth)
+            strategies.append({
+                **base_ydl_opts,
+                'ignoreerrors': True,
+                'cookiefile': YOUTUBE_COOKIES_FILE,
+                'extractor_args': {'youtube': {'player_client': ['ios']}},
+            })
+            # Estrategia 3: android + cookies (cliente Android app)
+            strategies.append({
+                **base_ydl_opts,
+                'ignoreerrors': True,
+                'cookiefile': YOUTUBE_COOKIES_FILE,
+                'extractor_args': {'youtube': {'player_client': ['android']}},
+            })
+            # Estrategia 4: mweb + cookies (cliente móvil web)
+            strategies.append({
+                **base_ydl_opts,
+                'ignoreerrors': True,
+                'cookiefile': YOUTUBE_COOKIES_FILE,
+                'extractor_args': {'youtube': {'player_client': ['mweb']}},
+            })
+            # Estrategia 5: web + cookies (último con auth)
             strategies.append({
                 **base_ydl_opts,
                 'ignoreerrors': True,
@@ -212,11 +228,10 @@ def analyze_video(url: str):
                 'extractor_args': {'youtube': {'player_client': ['web']}},
             })
 
-        # ── Sin cookies (último recurso) ──────────────────────────
+        # ── Sin cookies (último recurso absoluto) ────────────────────────────
         strategies.append({
             **base_ydl_opts,
             'ignoreerrors': False,
-            'extractor_args': {'youtube': {'player_client': compatible_clients}},
         })
 
         info = None
