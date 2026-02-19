@@ -302,14 +302,24 @@ def analyze_video(url: str):
                     continue
                 seen_resolutions.add(resolution_key)
 
+                # Identificar codec para el label
+                codec_name = "H.264"
+                if 'vp9' in vcodec.lower() or 'vp09' in vcodec.lower():
+                    codec_name = "VP9"
+                elif 'av01' in vcodec.lower() or 'av1' in vcodec.lower():
+                    codec_name = "AV1"
+
+                tbr_val = f.get('tbr') or 0
+                print(f"  [SELECTED] {resolution_key}: format_id={format_id}, codec={codec_name}, tbr={tbr_val}, ext={f.get('ext')}")
+
                 video_formats.append({
                     "format_id": format_id,
                     "extension": "mp4",
                     "resolution": resolution_key,
                     "filesize_str": size_str,
-                    "label": f"{resolution_key} - MP4",
+                    "label": f"{resolution_key} • {codec_name}",
                     "is_video": True,
-                    "tbr": f.get('tbr') or 0
+                    "tbr": tbr_val
                 })
 
         # Ordenar videos por altura (resolución)
