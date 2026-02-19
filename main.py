@@ -13,6 +13,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import yt_dlp
 
+import tempfile
+
 app = FastAPI()
 
 # Directorios
@@ -25,6 +27,22 @@ TEMPLATE_DIR = BASE_DIR / "templates"
 DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
+
+# --- SISTEMA DE COOKIES PARA YOUTUBE ---
+# En Railway: Settings > Variables > YOUTUBE_COOKIES = <contenido del cookies.txt>
+YOUTUBE_COOKIES_FILE = None
+_cookies_content = os.environ.get('YOUTUBE_COOKIES', '')
+if _cookies_content.strip():
+    try:
+        _tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8')
+        _tmp.write(_cookies_content)
+        _tmp.close()
+        YOUTUBE_COOKIES_FILE = _tmp.name
+        print(f"[INFO] Cookies de YouTube cargadas desde variable de entorno -> {YOUTUBE_COOKIES_FILE}")
+    except Exception as _e:
+        print(f"[WARN] No se pudo escribir cookies.txt: {_e}")
+else:
+    print("[INFO] No se encontraron YOUTUBE_COOKIES en variables de entorno.")
 
 # --- CONFIGURACIÓN DE VIDEO EXTRACTOR ---
 
@@ -150,16 +168,15 @@ def analyze_video(url: str):
 
         # Configuración de yt-dlp para extracción robusta y máxima calidad
         ydl_opts = {
-            'quiet': False,  # Mostrar logs para depuración
-            'no_warnings': False,
+            'quiet': True,
+            'no_warnings': True,
             'noplaylist': True,
             'extract_flat': False,
             'nocheckcertificate': True,
-            'ignoreerrors': False,  # No silenciar errores durante análisis
+            'ignoreerrors': True,
             'geo_bypass': True,
             'socket_timeout': 20,
             # tv_embedded bypasea la detección de IP servidor de YouTube
-            # y devuelve la lista completa de formatos incluyendo 1080p/4K
             'extractor_args': {
                 'youtube': {
                     'player_client': ['tv_embedded', 'ios'],
@@ -168,6 +185,13 @@ def analyze_video(url: str):
             # Incluir manifiestos DASH (necesarios para 1080p+)
             'youtube_include_dash_manifest': True,
         }
+
+        # Agregar cookies si están disponibles (CRUCIAL para evitar bot detection en IPs de servidor)
+        if YOUTUBE_COOKIES_FILE:
+            ydl_opts['cookiefile'] = YOUTUBE_COOKIES_FILE
+            print(f"[INFO] Usando cookies para: {target_url}")
+        else:
+            print("[WARN] Sin cookies - YouTube puede bloquear esta solicitud en IPs de servidor.")
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             try:
