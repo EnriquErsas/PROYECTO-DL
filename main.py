@@ -372,8 +372,9 @@ def download_selected(url: str, format_id: str, background_tasks: BackgroundTask
         final_ext = "mp3"
     else:
         # Descarga de Video MP4
+        # Priorizamos audio m4a (AAC) para que sea compatible con todos los reproductores
         ydl_opts.update({
-            'format': f"{format_id}+bestaudio/best",
+            'format': f"{format_id}+bestaudio[ext=m4a]/bestaudio/best",
             'merge_output_format': 'mp4',
         })
         final_ext = "mp4"
