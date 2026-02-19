@@ -243,115 +243,93 @@ def analyze_video(url: str):
                         detail=f"El servidor no puede conectarse a '{domain}'. Este dominio puede estar bloqueado."
                     )
                 continue
-            
-            if not info:
-                 raise HTTPException(status_code=404, detail="No se pudo extraer información del video.")
 
-            video_formats = []
-            audio_formats = []
-            
-            raw_formats = info.get('formats')
-            if raw_formats is None or not isinstance(raw_formats, list):
-                raw_formats = []
-            if not raw_formats: 
-                raw_formats = [info]
+        # --- Fuera del loop: procesar formatos del info obtenido ---
+        if not info:
+            raise HTTPException(status_code=404, detail="No se pudo extraer información del video.")
 
-            # Set para deduplicación por resolución (Video)
-            seen_resolutions = set()
+        video_formats = []
+        audio_formats = []
 
-            # Ordenar por ALTURA (resolución) primero, luego por bitrate
-            # Esto garantiza que para cada resolución nos quedamos con el mejor formato
-            def quality_key(f):
-                height = f.get('height') or 0
-                tbr = f.get('tbr') or 0
-                filesize = f.get('filesize') or 0
-                return (height, tbr, filesize)
-            
-            raw_formats.sort(key=quality_key, reverse=True)
-            print(f"Total de formatos encontrados por yt-dlp: {len(raw_formats)}")
-            # Imprimir resumen de formatos para depuración
-            for fmt in raw_formats[:10]:
-                print(f"  Format: {fmt.get('format_id')} | {fmt.get('height')}p | vcodec={fmt.get('vcodec')} | acodec={fmt.get('acodec')} | ext={fmt.get('ext')}")
+        raw_formats = info.get('formats')
+        if raw_formats is None or not isinstance(raw_formats, list):
+            raw_formats = []
+        if not raw_formats:
+            raw_formats = [info]
 
-            for f in raw_formats:
-                if not f: continue
+        # Set para deduplicación por resolución (Video)
+        seen_resolutions = set()
 
-                ext = f.get('ext')
-                format_id = f.get('format_id')
-                vcodec = f.get('vcodec', 'none')
-                acodec = f.get('acodec', 'none')
-                is_video = vcodec != 'none'
-                is_audio = vcodec == 'none' and acodec != 'none'
+        # Ordenar por ALTURA (resolución) primero, luego por bitrate
+        def quality_key(f):
+            height = f.get('height') or 0
+            tbr = f.get('tbr') or 0
+            filesize = f.get('filesize') or 0
+            return (height, tbr, filesize)
 
-                filesize = f.get('filesize') or f.get('filesize_approx')
-                size_str = format_size(filesize)
+        raw_formats.sort(key=quality_key, reverse=True)
+        print(f"Total de formatos encontrados por yt-dlp: {len(raw_formats)}")
+        for fmt in raw_formats[:10]:
+            print(f"  Format: {fmt.get('format_id')} | {fmt.get('height')}p | vcodec={fmt.get('vcodec')} | acodec={fmt.get('acodec')} | ext={fmt.get('ext')}")
 
-                if is_video:
-                    # Filtro: Solo MP4 o contenedores compatibles
-                    # Nota: yt-dlp a veces lista 'webm' como mejor video, pero lo convertiremos a mp4 al descargar.
-                    # Sin embargo, para la UI limpia, mostraremos "MP4" si es video.
-                    # El usuario pide "filtra... solo incluya aquellos cuya extensión sea mp4"
-                    # Si somos estrictos, perderemos 1080p/4k en YT (que son webm).
-                    # Haremos un truco: Si es webm/mkv de alta calidad, lo aceptamos pero lo etiquetamos MP4 (ya que convertiremos).
-                    # OJO: El requerimiento dice "Elimina los archivos webm... de esta lista".
-                    # Si seguimos al pie de la letra, solo mostramos lo que YA es mp4 nativo (usualmente 720p/360p).
-                    # Voy a priorizar la experiencia: Si hay mp4 nativo, bien. Si no, permitimos 'bestvideo' y transcodificamos implícitamente.
-                    # Pero para cumplir "Deduplicación", agruparemos por resolución.
-                    
-                    height = f.get('height')
-                    if not height: continue
+        for f in raw_formats:
+            if not f: continue
 
-                    resolution_key = f"{height}p"
-                    
-                    # Deduplicación: Si ya vimos esta resolución, saltar (porque ya procesamos el de mejor bitrate arriba)
-                    if resolution_key in seen_resolutions:
-                        continue
-                    seen_resolutions.add(resolution_key)
+            format_id = f.get('format_id')
+            vcodec = f.get('vcodec', 'none')
+            acodec = f.get('acodec', 'none')
+            is_video = vcodec != 'none'
 
-                    video_formats.append({
-                        "format_id": format_id,
-                        "extension": "mp4", # Forzamos la etiqueta ya que haremos merge
-                        "resolution": resolution_key,
-                        "filesize_str": size_str,
-                        "label": f"{resolution_key} - MP4",
-                        "is_video": True,
-                        "tbr": f.get('tbr') or 0
-                    })
+            filesize = f.get('filesize') or f.get('filesize_approx')
+            size_str = format_size(filesize)
 
-                elif is_audio:
-                    # Para audio, solo queremos las mejores opciones.
-                    # A veces hay muchas replicas. Agrupamos por bitrate aproximado?
-                    # O simplemente ofrecemos "Audio (Best)"
-                    pass
+            if is_video:
+                height = f.get('height')
+                if not height: continue
 
-            # Ordenar videos por altura (resolución)
-            video_formats.sort(key=lambda x: int(x['resolution'].replace('p','')), reverse=True)
+                resolution_key = f"{height}p"
 
-            # Agregar opción de Audio (MP3) - Generada artificialmente basada en 'bestaudio'
-            # Buscamos el mejor audio disponible para estimar tamaño
-            best_audio = next((f for f in raw_formats if f.get('vcodec') == 'none'), None)
-            audio_size_str = "N/A"
-            if best_audio:
-                 audio_size_str = format_size(best_audio.get('filesize') or best_audio.get('filesize_approx'))
+                if resolution_key in seen_resolutions:
+                    continue
+                seen_resolutions.add(resolution_key)
 
-            audio_formats.append({
-                "format_id": "best_audio_mp3", # ID especial para nuestro backend
-                "extension": "mp3",
-                "resolution": "Audio High Quality",
-                "filesize_str": audio_size_str, # Estimado
-                "label": "Audio Only - MP3",
-                "is_video": False
-            })
+                video_formats.append({
+                    "format_id": format_id,
+                    "extension": "mp4",
+                    "resolution": resolution_key,
+                    "filesize_str": size_str,
+                    "label": f"{resolution_key} - MP4",
+                    "is_video": True,
+                    "tbr": f.get('tbr') or 0
+                })
 
-            return {
-                "title": info.get('title', 'Video Desconocido'),
-                "thumbnail": info.get('thumbnail'),
-                "duration": info.get('duration'),
-                "videos": video_formats,
-                "audios": audio_formats,
-                "url": target_url,
-                "original_url": url
-            }
+        # Ordenar videos por altura (resolución)
+        video_formats.sort(key=lambda x: int(x['resolution'].replace('p', '')), reverse=True)
+
+        # Opción de Audio (MP3)
+        best_audio = next((f for f in raw_formats if f.get('vcodec') == 'none'), None)
+        audio_size_str = "N/A"
+        if best_audio:
+            audio_size_str = format_size(best_audio.get('filesize') or best_audio.get('filesize_approx'))
+
+        audio_formats.append({
+            "format_id": "best_audio_mp3",
+            "extension": "mp3",
+            "resolution": "Audio High Quality",
+            "filesize_str": audio_size_str,
+            "label": "Audio Only - MP3",
+            "is_video": False
+        })
+
+        return {
+            "title": info.get('title') or 'Video Desconocido',
+            "thumbnail": info.get('thumbnail'),
+            "duration": info.get('duration'),
+            "videos": video_formats,
+            "audios": audio_formats,
+            "url": target_url,
+            "original_url": url
+        }
 
     except HTTPException:
         # Re-lanzar HTTPExceptions sin modificar (no convertirlas en 500)
