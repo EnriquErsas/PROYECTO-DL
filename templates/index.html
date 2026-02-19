@@ -358,7 +358,12 @@
                 addToHistory(data);
             } catch (e) {
                 console.error(e);
-                showError(e.detail || "Connection terminated by remote host.");
+                // Mensaje claro para dominios bloqueados por el servidor (503)
+                let errMsg = e.detail || "Connection terminated by remote host.";
+                if (e.status === 503 || (errMsg && errMsg.includes('bloqueado'))) {
+                    errMsg = '⚠️ ' + errMsg;
+                }
+                showError(errMsg);
                 setLoading(false);
             }
         }
@@ -368,7 +373,15 @@
             ui.search.classList.add('hidden');
             ui.results.classList.remove('hidden');
 
-            document.getElementById('thumbnail').src = data.thumbnail;
+            // Protección: no asignar null/undefined a src (causaría GET /null)
+            const thumbEl = document.getElementById('thumbnail');
+            if (data.thumbnail && data.thumbnail !== 'null') {
+                thumbEl.src = data.thumbnail;
+                thumbEl.style.display = '';
+            } else {
+                thumbEl.src = '';
+                thumbEl.style.display = 'none';
+            }
             document.getElementById('videoTitle').innerText = data.title;
             document.getElementById('videoDuration').innerText = formatDuration(data.duration);
 
@@ -580,9 +593,14 @@
         }
 
         function addToHistory(data) {
+            // Protección: no usar thumbnail nulo en historial
+            const thumbSrc = (data.thumbnail && data.thumbnail !== 'null') ? data.thumbnail : '';
+            const thumbTag = thumbSrc
+                ? `<img src="${thumbSrc}" class="w-10 h-10 rounded object-cover">`
+                : `<div class="w-10 h-10 rounded bg-white/5 flex items-center justify-center text-gray-500"><i class="fa-solid fa-film text-xs"></i></div>`;
             const item = `
                 <div class="min-w-[200px] glass-panel p-3 rounded-lg flex gap-3 items-center border border-white/5 cursor-pointer hover:bg-white/5 transition-colors" onclick="loadHistoryItem('${data.url}')">
-                    <img src="${data.thumbnail}" class="w-10 h-10 rounded object-cover">
+                    ${thumbTag}
                     <div class="overflow-hidden">
                         <div class="text-xs font-bold text-white truncate w-24">${data.title}</div>
                         <div class="text-[10px] text-gray-500">${new Date().toLocaleTimeString()}</div>

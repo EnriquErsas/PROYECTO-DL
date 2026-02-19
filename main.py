@@ -1,4 +1,5 @@
 import os
+import socket
 import shutil
 import uuid
 import re
@@ -100,12 +101,9 @@ class VideoExtractor:
             m3u8_url = self.find_m3u8(html)
             if m3u8_url:
                 print(f"Manifiesto HLS detectado: {m3u8_url}")
-                # Devolver la URL del m3u8 suele funcionar mejor con yt-dlp directo
-                # pero a veces yt-dlp prefiere la URL de la página para sacar headers.
-                # En este caso, si encontramos el m3u8 "oculto", puede que yt-dlp no lo vea en la página principal,
-                # así que devolverlo explícitamente es útil.
-                # Corrección: A veces m3u8 tiene escape chars (\/)
-                return m3u8_url.replace(r'\/', '/')
+                # Limpiar: quitar slash escapado, backslashes finales y espacios
+                clean_url = m3u8_url.replace(r'\/', '/').replace('\\', '').strip()
+                return clean_url
 
         except Exception as e:
             print(f"Error en resolución agresiva: {e}")
@@ -171,7 +169,21 @@ def analyze_video(url: str):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             try:
                 info = ydl.extract_info(target_url, download=False)
+                # Si la URL resuelta falla (ej: m3u8 con token caducado → HTTP 400),
+                # yt-dlp devuelve None en vez de lanzar excepción (por ignoreerrors=True)
+                if not info and target_url != url:
+                    print(f"URL resuelta devolvió None, reintentando con URL original: {url}")
+                    info = ydl.extract_info(url, download=False)
             except Exception as e:
+                error_str = str(e)
+                # Detectar errores de DNS / red → el servidor bloquea ese dominio
+                if 'NameResolutionError' in error_str or 'Failed to resolve' in error_str or 'No address associated' in error_str:
+                    from urllib.parse import urlparse
+                    domain = urlparse(url).netloc
+                    raise HTTPException(
+                        status_code=503,
+                        detail=f"El servidor no puede conectarse a '{domain}'. Este dominio puede estar bloqueado en el entorno de ejecución."
+                    )
                 print(f"Fallo con URL resuelta ({target_url}), intentando original ({url}): {e}")
                 if target_url != url:
                     info = ydl.extract_info(url, download=False)
