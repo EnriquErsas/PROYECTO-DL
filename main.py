@@ -16,12 +16,12 @@ app = FastAPI()
 
 # Directorios
 BASE_DIR = Path(__file__).resolve().parent
-DOWNLOAD_DIR = BASE_DIR / "downloads"
+# En Hugging Face/Docker, /tmp es siempre escribible
+DOWNLOAD_DIR = Path("/tmp/downloads")
 TEMPLATE_DIR = BASE_DIR / "templates"
 
 # Asegurar directorios
-DOWNLOAD_DIR.mkdir(exist_ok=True)
-TEMPLATE_DIR.mkdir(exist_ok=True)
+DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
 

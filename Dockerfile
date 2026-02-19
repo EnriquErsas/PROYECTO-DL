@@ -16,9 +16,6 @@ RUN useradd -m -u 1000 user
 # Establecer directorio de trabajo
 WORKDIR /app
 
-# Crear directorio de descargas y asegurar permisos ANTES de cambiar de usuario
-RUN mkdir -p /app/downloads && chown -R user:user /app
-
 # Copiar requirements y la aplicación
 COPY --chown=user requirements.txt .
 COPY --chown=user . .
@@ -26,7 +23,7 @@ COPY --chown=user . .
 # Cambiar al usuario no-root
 USER user
 
-# Instalar dependencias de Python en el directorio del usuario
+# Instalar dependencias de Python
 ENV PATH="/home/user/.local/bin:$PATH"
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
@@ -35,5 +32,4 @@ RUN pip install --no-cache-dir --upgrade pip && \
 EXPOSE 7860
 
 # Comando para ejecutar la aplicación
-# Importante: host 0.0.0.0 y puerto 7860 para Spaces
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]
