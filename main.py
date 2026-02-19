@@ -182,7 +182,8 @@ def analyze_video(url: str):
             'nocheckcertificate': True,
             'geo_bypass': True,
             'socket_timeout': 20,
-            'check_formats': False,  # No verificar URLs de formatos (requiere JS runtime)
+            'check_formats': False,
+            'remote_components': {'ejs:github'},  # Descargar EJS scripts desde GitHub
         }
 
         # Lista de estrategias a intentar en orden de preferencia
@@ -191,12 +192,9 @@ def analyze_video(url: str):
         # La IP de Railway está flaggeada → NECESITAMOS cookies
         # ── Con cookies (prioridad máxima) ─────────────────────────
         if YOUTUBE_COOKIES_FILE:
-            # Estrategia 1: web + cookies + nodejs → COMBO COMPLETO (DEBUG)
+            # Estrategia 1: web + cookies + nodejs → COMBO COMPLETO
             strategies.append({
                 **base_ydl_opts,
-                'quiet': False,
-                'no_warnings': False,
-                'verbose': True,
                 'ignoreerrors': True,
                 'cookiefile': YOUTUBE_COOKIES_FILE,
                 'extractor_args': {'youtube': {
