@@ -16,6 +16,9 @@ RUN useradd -m -u 1000 user
 # Establecer directorio de trabajo
 WORKDIR /app
 
+# Crear directorio de descargas y asegurar permisos ANTES de cambiar de usuario
+RUN mkdir -p /app/downloads && chown -R user:user /app
+
 # Copiar requirements y la aplicación
 COPY --chown=user requirements.txt .
 COPY --chown=user . .
@@ -27,9 +30,6 @@ USER user
 ENV PATH="/home/user/.local/bin:$PATH"
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
-
-# Crear directorio de descargas y asegurar permisos
-RUN mkdir -p /app/downloads
 
 # Exponer el puerto estándar de Hugging Face (7860)
 EXPOSE 7860
