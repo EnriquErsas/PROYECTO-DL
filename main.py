@@ -191,24 +191,20 @@ def analyze_video(url: str):
         # Lista de estrategias a intentar en orden de preferencia
         strategies = []
 
-        # CLAVE: YouTube requiere PO Token para cliente 'web' en IPs de datacenter.
-        # 'tv_embedded' NO requiere PO Token → usarlo PRIMERO con cookies.
+        # Usamos una lista de clientes que no suelen pedir PO Token
+        # Si uno falla (ej. tv_embedded), yt-dlp prueba el siguiente de la lista (android, ios, mweb)
+        compatible_clients = ['tv_embedded', 'android', 'ios', 'mweb']
+
         if YOUTUBE_COOKIES_FILE:
-            # Estrategia 1: tv_embedded + cookies → SIN PO Token + Auth (COMBO GANADOR)
+            # Estrategia 1: Clientes compatibles + Cookies (EL MEJOR COMBO)
             strategies.append({
                 **base_ydl_opts,
                 'ignoreerrors': True,
                 'cookiefile': YOUTUBE_COOKIES_FILE,
-                'extractor_args': {'youtube': {'player_client': ['tv_embedded']}},
+                'extractor_args': {'youtube': {'player_client': compatible_clients}},
             })
-            # Estrategia 2: mweb + cookies → cliente móvil, sin PO Token
-            strategies.append({
-                **base_ydl_opts,
-                'ignoreerrors': True,
-                'cookiefile': YOUTUBE_COOKIES_FILE,
-                'extractor_args': {'youtube': {'player_client': ['mweb']}},
-            })
-            # Estrategia 3: web + cookies (puede fallar por PO Token, pero intentamos)
+            
+            # Estrategia 2: Cliente 'web' + Cookies (Solo si lo anterior falla, por si acaso)
             strategies.append({
                 **base_ydl_opts,
                 'ignoreerrors': True,
@@ -220,6 +216,7 @@ def analyze_video(url: str):
         strategies.append({
             **base_ydl_opts,
             'ignoreerrors': False,
+            'extractor_args': {'youtube': {'player_client': compatible_clients}},
         })
 
         info = None
@@ -371,7 +368,7 @@ def download_selected(url: str, format_id: str):
         'outtmpl': str(DOWNLOAD_DIR / f"{file_id}.%(ext)s"),
         'cookiefile': YOUTUBE_COOKIES_FILE if YOUTUBE_COOKIES_FILE else None,
         'js_runtimes': {'nodejs': {}},
-        'extractor_args': {'youtube': {'player_client': ['tv_embedded']}}, # Sincronizado con analyze
+        'extractor_args': {'youtube': {'player_client': ['tv_embedded', 'android', 'ios', 'mweb']}}, # Fallback múltiple en descarga
     }
 
     ydl_opts = {**base_opts}
