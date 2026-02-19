@@ -11,13 +11,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
-    && node --version \
     && rm -rf /var/lib/apt/lists/*
 
-# Verificar que node está accesible globalmente
-RUN which node && node -e "console.log('Node.js OK:', process.version)"
+# Verificar que node está en /usr/bin (accesible para TODOS los usuarios)
+RUN which node && node --version && echo "Node OK: $(node --version)"
 
-# Crear un usuario no-root para seguridad (Requisito de HF Spaces)
+# Hacer symlink explícito por si acaso
+RUN ln -sf $(which node) /usr/local/bin/node && ln -sf $(which npm) /usr/local/bin/npm
+
+# Crear un usuario no-root para seguridad
 RUN useradd -m -u 1000 user
 
 # Establecer directorio de trabajo
@@ -30,13 +32,15 @@ COPY --chown=user . .
 # Cambiar al usuario no-root
 USER user
 
+# PATH que incluye tanto local como sistema
+ENV PATH="/home/user/.local/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+
 # Instalar dependencias de Python (incluye yt-dlp-ejs)
-ENV PATH="/home/user/.local/bin:/usr/local/bin:/usr/bin:$PATH"
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Verificar que yt-dlp ve Node.js
-RUN node --version && python -c "import yt_dlp; print('yt-dlp OK')"
+# Verificar que yt-dlp ve Node.js desde el usuario no-root
+RUN node --version && python -c "import yt_dlp; print('yt-dlp OK:', yt_dlp.version.__version__)"
 
 # Exponer el puerto (Railway usa variable de entorno PORT)
 EXPOSE 8080
