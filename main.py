@@ -191,10 +191,12 @@ def analyze_video(url: str):
         # La IP de Railway está flaggeada → NECESITAMOS cookies
         # ── Con cookies (prioridad máxima) ─────────────────────────
         if YOUTUBE_COOKIES_FILE:
-            # Estrategia 1: web + cookies + nodejs → COMBO COMPLETO
-            # Autentica con cookies + descifra URLs con Node.js
+            # Estrategia 1: web + cookies + nodejs → COMBO COMPLETO (DEBUG)
             strategies.append({
                 **base_ydl_opts,
+                'quiet': False,
+                'no_warnings': False,
+                'verbose': True,
                 'ignoreerrors': True,
                 'cookiefile': YOUTUBE_COOKIES_FILE,
                 'extractor_args': {'youtube': {
