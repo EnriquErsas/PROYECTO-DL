@@ -370,19 +370,11 @@ def download_selected(url: str, format_id: str, background_tasks: BackgroundTask
             }],
         })
         final_ext = "mp3"
+    else:
         # Descarga de Video MP4
         ydl_opts.update({
-            'format': f"{format_id}+bestaudio/bestvideo/best",
+            'format': f"{format_id}+bestaudio/best",
             'merge_output_format': 'mp4',
-            # Optimizar FFmpeg para unión rápida (copy en lugar de re-encode)
-            'postprocessor_args': {
-                'ffmpeg': [
-                    '-c', 'copy',       # Intentar copiar streams sin re-procesar
-                    '-map', '0:v:0',    # Mapear primer video
-                    '-map', '1:a:0',    # Mapear primer audio
-                    '-shortest'
-                ]
-            }
         })
         final_ext = "mp4"
 
