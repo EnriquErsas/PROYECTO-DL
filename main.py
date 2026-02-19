@@ -188,18 +188,19 @@ def analyze_video(url: str):
 
         # Lógica de cliente según disponibilidad de cookies
         if YOUTUBE_COOKIES_FILE:
-            # Con cookies: usar cliente 'web' estándar → da lista completa de formatos (1080p/4K)
+            # Con cookies: usar cliente 'ios' → más estable, no verifica formatos en analyze
+            # (el cliente 'web' con cookies causa "Requested format is not available")
             ydl_opts['cookiefile'] = YOUTUBE_COOKIES_FILE
             ydl_opts['extractor_args'] = {
-                'youtube': {'player_client': ['web', 'ios', 'android']}
+                'youtube': {'player_client': ['ios', 'android']}
             }
-            print(f"[INFO] Modo autenticado (cookies) → cliente web para: {target_url}")
+            print(f"[INFO] Modo autenticado (cookies+ios) → para: {target_url}")
         else:
-            # Sin cookies: usar tv_embedded que a veces funciona en IPs de servidor
+            # Sin cookies: tv_embedded es el más tolerante en IPs de servidor
             ydl_opts['extractor_args'] = {
                 'youtube': {'player_client': ['tv_embedded', 'ios']}
             }
-            print("[WARN] Sin cookies → cliente tv_embedded (formatos limitados posibles)")
+            print("[WARN] Sin cookies → cliente tv_embedded")
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             try:
