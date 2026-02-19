@@ -324,6 +324,13 @@ def analyze_video(url: str):
                 # Prioridad REVISADA: filesize (exacto) > BR Calculado (mas preciso que approx) > filesize_approx
                 v_size = f.get('filesize')
                 
+                # FACTOR DE SEGURIDAD:
+                # Si yt-dlp no nos da el 'filesize' exacto (común en DASH/HLS), 
+                # las estimaciones (approx o bitrate) suelen ser SOLO del video track o estar comprimidas.
+                # Experiencia muestra que el archivo MP4 final (muxed) suele ser mayor.
+                # Aplicaremos un buffer si no hay filesize exacto.
+                is_estimate = False
+
                 if not v_size:
                     # Calcular por bitrate (TBR = Total Bitrate en kbits/s)
                     tbr = f.get('tbr') or f.get('vbr')
@@ -331,9 +338,11 @@ def analyze_video(url: str):
                     if tbr and duration_sec:
                         # kbps -> bytes/sec: (tbr * 1000) / 8
                         v_size = (tbr * 1000 / 8) * duration_sec
+                        is_estimate = True
                 
                 if not v_size:
                      v_size = f.get('filesize_approx')
+                     is_estimate = True
                 
                 v_size = v_size or 0
 
@@ -343,7 +352,17 @@ def analyze_video(url: str):
                 # Si es DASH video-only, tbr es video bitrate. Necesitamos sumar audio.
                 
                 total_size = v_size + audio_size_bytes
-                size_str = format_size(total_size) if total_size > 0 else "N/A"
+                
+                # Si es una estimación, a menudo yt-dlp subestima el overhead del contenedor MP4 y el audio real.
+                # Para evitar decepciones (ej: dice 300MB y baja 600MB), si es estimado, mostramos RANGO o aumentamos.
+                # En este caso, el usuario reportó DOBLE tamaño. Vamos a ser conservadores.
+                if is_estimate and total_size > 0:
+                     # Aplicar factor de corrección basado en reporte usuario (aprox 2x en worst case)
+                     # O simplemente mostrar "~"
+                     total_size = total_size * 1.5 
+                     size_str = f"~{format_size(total_size)}"
+                else:
+                     size_str = format_size(total_size) if total_size > 0 else "N/A"
 
                 # Simplificar codec para mostrar al usuario
                 codec_label = "MP4"
