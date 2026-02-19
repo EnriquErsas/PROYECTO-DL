@@ -360,8 +360,8 @@ def download_selected(url: str, format_id: str):
 
     file_id = str(uuid.uuid4())
 
-    # Configuración base de yt-dlp
-    ydl_opts = {
+    # Configuración base con EJS y Node.js para evitar el bot en la descarga también
+    base_opts = {
         'noplaylist': True,
         'quiet': True,
         'http_headers': DEFAULT_HEADERS,
@@ -369,7 +369,12 @@ def download_selected(url: str, format_id: str):
         'geo_bypass': True,
         'retries': 10,
         'outtmpl': str(DOWNLOAD_DIR / f"{file_id}.%(ext)s"),
+        'cookiefile': YOUTUBE_COOKIES_FILE if YOUTUBE_COOKIES_FILE else None,
+        'js_runtimes': {'nodejs': {}},
+        'extractor_args': {'youtube': {'player_client': ['tv_embedded']}}, # Sincronizado con analyze
     }
+
+    ydl_opts = {**base_opts}
 
     if format_id == "best_audio_mp3":
         ydl_opts.update({
@@ -383,6 +388,7 @@ def download_selected(url: str, format_id: str):
         final_ext = "mp3"
     else:
         # Descarga de Video MP4 - MODO RÁPIDO (Stream Copy)
+        # Forzamos EXACTAMENTE el format_id seleccionado + mejor audio
         ydl_opts.update({
             'format': f"{format_id}+bestaudio[ext=m4a]/bestaudio/best",
             'merge_output_format': 'mp4',
