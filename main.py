@@ -148,7 +148,7 @@ def analyze_video(url: str):
         
         print(f"URL final a analizar: {target_url}")
 
-        # Configuración de yt-dlp para extracción robusta
+        # Configuración de yt-dlp para extracción robusta y máxima calidad
         ydl_opts = {
             'quiet': True,
             'no_warnings': True,
@@ -158,10 +158,10 @@ def analyze_video(url: str):
             'ignoreerrors': True,
             'geo_bypass': True,
             'socket_timeout': 15,
-            # CRUCIAL: Usar identidad de Android para evitar bloqueo 403 en servidores (AWS/HF)
+            # CRUCIAL: Agregar 'web' para obtener calidades 1080p+ que en móvil son limitadas
             'extractor_args': {
                 'youtube': {
-                    'player_client': ['android', 'ios'],
+                    'player_client': ['web', 'mweb', 'android', 'ios'],
                 }
             },
         }
