@@ -191,31 +191,32 @@ def analyze_video(url: str):
         # Lista de estrategias a intentar en orden de preferencia
         strategies = []
 
-        # La IP de Railway está flaggeada → NECESITAMOS cookies
-        # ── Con cookies (prioridad máxima) ─────────────────────────
+        # CLAVE: YouTube requiere PO Token para cliente 'web' en IPs de datacenter.
+        # 'tv_embedded' NO requiere PO Token → usarlo PRIMERO con cookies.
         if YOUTUBE_COOKIES_FILE:
-            # Estrategia 1: web + cookies + nodejs
+            # Estrategia 1: tv_embedded + cookies → SIN PO Token + Auth (COMBO GANADOR)
+            strategies.append({
+                **base_ydl_opts,
+                'ignoreerrors': True,
+                'cookiefile': YOUTUBE_COOKIES_FILE,
+                'extractor_args': {'youtube': {'player_client': ['tv_embedded']}},
+            })
+            # Estrategia 2: mweb + cookies → cliente móvil, sin PO Token
+            strategies.append({
+                **base_ydl_opts,
+                'ignoreerrors': True,
+                'cookiefile': YOUTUBE_COOKIES_FILE,
+                'extractor_args': {'youtube': {'player_client': ['mweb']}},
+            })
+            # Estrategia 3: web + cookies (puede fallar por PO Token, pero intentamos)
             strategies.append({
                 **base_ydl_opts,
                 'ignoreerrors': True,
                 'cookiefile': YOUTUBE_COOKIES_FILE,
                 'extractor_args': {'youtube': {'player_client': ['web']}},
             })
-            # Estrategia 2: auto + cookies + nodejs
-            strategies.append({
-                **base_ydl_opts,
-                'ignoreerrors': True,
-                'cookiefile': YOUTUBE_COOKIES_FILE,
-            })
 
-        # ── Sin cookies (para videos que no lo requieran) ─────────
-        strategies.append({
-            **base_ydl_opts,
-            'ignoreerrors': True,
-            'extractor_args': {'youtube': {'player_client': ['tv_embedded']}},
-        })
-
-        # ── Último recurso ────────────────────────────────────────
+        # ── Sin cookies (último recurso) ──────────────────────────
         strategies.append({
             **base_ydl_opts,
             'ignoreerrors': False,
