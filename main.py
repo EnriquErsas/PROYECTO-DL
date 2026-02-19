@@ -3,6 +3,7 @@ import socket
 import shutil
 import uuid
 import re
+import threading
 import requests
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -12,7 +13,6 @@ from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import yt_dlp
-
 import tempfile
 
 app = FastAPI()
@@ -341,13 +341,14 @@ def analyze_video(url: str):
         raise HTTPException(status_code=500, detail=f"Error al analizar el video: {str(e)}")
 
 @app.get("/download-selected")
-def download_selected(url: str, format_id: str, background_tasks: BackgroundTasks):
+def download_selected(url: str, format_id: str):
+    """Inicia la descarga en background y devuelve un file_id para seguir el progreso."""
     if not url or not format_id:
         raise HTTPException(status_code=400, detail="URL y format_id requeridos")
 
     file_id = str(uuid.uuid4())
-    
-    # Configuración base
+
+    # Configuración base de yt-dlp
     ydl_opts = {
         'noplaylist': True,
         'quiet': True,
@@ -358,9 +359,7 @@ def download_selected(url: str, format_id: str, background_tasks: BackgroundTask
         'outtmpl': str(DOWNLOAD_DIR / f"{file_id}.%(ext)s"),
     }
 
-    # Lógica según el tipo de descarga
     if format_id == "best_audio_mp3":
-        # Descarga de Audio MP3
         ydl_opts.update({
             'format': 'bestaudio/best',
             'postprocessors': [{
@@ -371,46 +370,149 @@ def download_selected(url: str, format_id: str, background_tasks: BackgroundTask
         })
         final_ext = "mp3"
     else:
-        # Descarga de Video MP4
-        # Priorizamos audio m4a (AAC) para que sea compatible con todos los reproductores
         ydl_opts.update({
             'format': f"{format_id}+bestaudio[ext=m4a]/bestaudio/best",
             'merge_output_format': 'mp4',
         })
         final_ext = "mp4"
 
+    # Agregar hook de progreso
+    ydl_opts['progress_hooks'] = [make_progress_hook(file_id)]
+
+    # Inicializar progreso
+    download_progress[file_id] = {
+        'percent': 0, 'status': 'downloading',
+        'message': 'Iniciando descarga...', 'filename': None, 'path': None
+    }
+
+    # Lanzar descarga en hilo separado
+    thread = threading.Thread(
+        target=_run_download,
+        args=(file_id, url, final_ext, ydl_opts),
+        daemon=True
+    )
+    thread.start()
+
+    return JSONResponse({'file_id': file_id})
+
+
+# --- STORE GLOBAL DE PROGRESO ---
+download_progress = {}  # {file_id: {percent, status, message, filename, path}}
+
+
+def make_progress_hook(file_id: str):
+    """Crea un hook de progreso para yt-dlp que actualiza download_progress."""
+    download_count = [0]  # [0]=video, [1]=audio
+
+    def hook(d):
+        if d['status'] == 'downloading':
+            try:
+                total = d.get('total_bytes') or d.get('total_bytes_estimate', 0)
+                done = d.get('downloaded_bytes', 0)
+                pct = (done / total * 100) if total > 0 else 0
+
+                if download_count[0] == 0:  # Descargando video (0-70%)
+                    mapped = pct * 0.70
+                    msg = f'📥 Descargando video... {pct:.0f}%'
+                else:                        # Descargando audio (70-90%)
+                    mapped = 70 + pct * 0.20
+                    msg = f'🎵 Descargando audio... {pct:.0f}%'
+
+                download_progress[file_id].update({
+                    'percent': round(mapped, 1),
+                    'status': 'downloading',
+                    'message': msg
+                })
+            except Exception:
+                pass
+
+        elif d['status'] == 'finished':
+            download_count[0] += 1
+            if download_count[0] == 1:
+                download_progress[file_id].update({
+                    'percent': 70, 'message': '🎵 Descargando audio...'
+                })
+            else:
+                download_progress[file_id].update({
+                    'percent': 90, 'status': 'merging',
+                    'message': '⚙️ Combinando streams con FFmpeg...'
+                })
+    return hook
+
+
+def _run_download(file_id: str, url: str, final_ext: str, ydl_opts: dict):
+    """Ejecuta yt-dlp + FFmpeg en un hilo separado."""
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # Descarga
             info = ydl.extract_info(url, download=True)
-            video_title = info.get('title', 'video')
-            
-            final_path = DOWNLOAD_DIR / f"{file_id}.{final_ext}"
-            
-            # Busqueda de fallback si la extensión cambió (ej: m4a -> mp3)
-            if not final_path.exists():
-                found = list(DOWNLOAD_DIR.glob(f"{file_id}.*"))
-                if found:
-                    final_path = found[0]
-                    final_ext = final_path.suffix.lstrip('.')
-            
-            safe_title = "".join([c for c in video_title if c.isalnum() or c in (' ', '-', '_')]).strip()
-            user_filename = f"{safe_title}.{final_ext}"
+            video_title = (info.get('title') if info else None) or 'video'
 
-            background_tasks.add_task(cleanup_file, final_path)
+        # Buscar el archivo generado
+        final_path = DOWNLOAD_DIR / f"{file_id}.{final_ext}"
+        if not final_path.exists():
+            found = list(DOWNLOAD_DIR.glob(f"{file_id}.*"))
+            if found:
+                final_path = found[0]
+                final_ext = final_path.suffix.lstrip('.')
+            else:
+                download_progress[file_id].update({
+                    'status': 'error', 'message': 'Archivo no encontrado tras la descarga.'
+                })
+                return
 
-            return FileResponse(
-                path=final_path, 
-                filename=user_filename, 
-                media_type='application/octet-stream'
-            )
+        safe_title = "".join(c for c in video_title if c.isalnum() or c in (' ', '-', '_')).strip()
+        user_filename = f"{safe_title}.{final_ext}"
+
+        download_progress[file_id].update({
+            'percent': 100, 'status': 'ready',
+            'message': '✅ ¡Listo! Descargando archivo...',
+            'filename': user_filename,
+            'path': str(final_path)
+        })
 
     except Exception as e:
-        print(f"Error en descarga: {e}")
+        print(f"[ERROR] Descarga fallida ({file_id}): {e}")
+        download_progress[file_id].update({
+            'status': 'error', 'message': f'Error: {str(e)[:200]}'
+        })
+        # Limpiar archivos parciales
         for f in DOWNLOAD_DIR.glob(f"{file_id}.*"):
             try: os.remove(f)
             except: pass
-        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/progress/{file_id}")
+def get_progress(file_id: str):
+    """Devuelve el progreso actual de una descarga."""
+    data = download_progress.get(file_id)
+    if data is None:
+        raise HTTPException(status_code=404, detail="Descarga no encontrada")
+    return JSONResponse(data)
+
+
+@app.get("/get-file/{file_id}")
+def get_file(file_id: str, background_tasks: BackgroundTasks):
+    """Sirve el archivo cuando está listo. Sólo funciona si status='ready'."""
+    data = download_progress.get(file_id)
+    if not data or data.get('status') != 'ready':
+        raise HTTPException(status_code=404, detail="Archivo no disponible aún")
+
+    path = data['path']
+    filename = data['filename']
+
+    if not path or not Path(path).exists():
+        raise HTTPException(status_code=404, detail="Archivo no encontrado en disco")
+
+    # Limpiar tras entregar
+    background_tasks.add_task(cleanup_file, Path(path))
+    # Limpiar entrada del progreso tras un rato
+    def _cleanup_progress():
+        import time; time.sleep(60)
+        download_progress.pop(file_id, None)
+    threading.Thread(target=_cleanup_progress, daemon=True).start()
+
+    return FileResponse(path=path, filename=filename, media_type='application/octet-stream')
+
 
 if __name__ == "__main__":
     import uvicorn

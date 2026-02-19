@@ -304,6 +304,76 @@
                     class="fa-solid fa-xmark"></i></button>
         </div>
 
+        <!-- Download Progress Modal -->
+        <div id="progressModal"
+            class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+            <div
+                class="glass-panel border border-indigo-500/40 rounded-2xl p-8 w-full max-w-md mx-4 shadow-2xl relative overflow-hidden">
+                <!-- Glow -->
+                <div class="absolute -top-10 -right-10 w-40 h-40 bg-indigo-600/20 rounded-full blur-3xl"></div>
+                <div class="absolute -bottom-10 -left-10 w-40 h-40 bg-purple-600/20 rounded-full blur-3xl"></div>
+
+                <div class="relative z-10">
+                    <!-- Header -->
+                    <div class="flex items-center gap-3 mb-6">
+                        <div id="progressIcon"
+                            class="w-10 h-10 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 text-lg">
+                            <i class="fa-solid fa-arrow-down-to-bracket"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-white font-bold text-lg">Descargando</h3>
+                            <p id="progressPhase" class="text-indigo-300 text-xs font-mono">Iniciando...</p>
+                        </div>
+                    </div>
+
+                    <!-- Progress Bar -->
+                    <div class="w-full bg-white/5 rounded-full h-3 mb-3 overflow-hidden border border-white/10">
+                        <div id="progressBar"
+                            class="h-full rounded-full transition-all duration-500 bg-gradient-to-r from-indigo-500 to-purple-500"
+                            style="width: 0%">
+                        </div>
+                    </div>
+
+                    <!-- Percent + Message -->
+                    <div class="flex justify-between items-center mb-6">
+                        <p id="progressMsg" class="text-gray-300 text-sm">Preparando...</p>
+                        <span id="progressPct" class="text-white font-bold font-mono text-lg">0%</span>
+                    </div>
+
+                    <!-- Phase Steps -->
+                    <div class="flex justify-between text-xs font-mono">
+                        <div id="step1" class="flex flex-col items-center gap-1 opacity-40">
+                            <div class="w-6 h-6 rounded-full border border-current flex items-center justify-center">
+                                <i class="fa-solid fa-film text-[10px]"></i>
+                            </div>
+                            <span>Video</span>
+                        </div>
+                        <div class="flex-1 h-px bg-white/10 mt-3 mx-2"></div>
+                        <div id="step2" class="flex flex-col items-center gap-1 opacity-40">
+                            <div class="w-6 h-6 rounded-full border border-current flex items-center justify-center">
+                                <i class="fa-solid fa-music text-[10px]"></i>
+                            </div>
+                            <span>Audio</span>
+                        </div>
+                        <div class="flex-1 h-px bg-white/10 mt-3 mx-2"></div>
+                        <div id="step3" class="flex flex-col items-center gap-1 opacity-40">
+                            <div class="w-6 h-6 rounded-full border border-current flex items-center justify-center">
+                                <i class="fa-solid fa-gears text-[10px]"></i>
+                            </div>
+                            <span>Merge</span>
+                        </div>
+                        <div class="flex-1 h-px bg-white/10 mt-3 mx-2"></div>
+                        <div id="step4" class="flex flex-col items-center gap-1 opacity-40">
+                            <div class="w-6 h-6 rounded-full border border-current flex items-center justify-center">
+                                <i class="fa-solid fa-check text-[10px]"></i>
+                            </div>
+                            <span>Listo</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </main>
 
     <!-- Recent History (Local Only) -->
@@ -500,62 +570,117 @@
         async function executeDownload() {
             if (!selectedFormatId) return;
 
-            ui.dlBtn.disabled = true;
-            ui.dlBtn.classList.add('cursor-not-allowed');
-            const originalText = document.getElementById('btnText').innerText;
-            document.getElementById('btnText').innerText = "DOWNLOADING...";
+            // Mostrar modal de progreso
+            const modal = document.getElementById('progressModal');
+            modal.classList.remove('hidden');
+            _updateProgress(0, 'downloading', 'Iniciando descarga...');
 
-            ui.loading.classList.remove('hidden');
-            ui.loading.style.position = 'fixed';
-            ui.loading.style.zIndex = '999';
-            ui.loading.style.top = '50%';
-            ui.loading.style.left = '50%';
-            ui.loading.style.transform = 'translate(-50%, -50%)';
-            document.getElementById('loadingText').innerText = "Processing Data Stream...";
-            ui.results.classList.add('blur-sm');
+            ui.dlBtn.disabled = true;
+            document.getElementById('btnText').innerText = 'DOWNLOADING...';
+
+            let pollInterval = null;
+            let mergeAnimInterval = null;
 
             try {
+                // 1. Iniciar descarga en backend (devuelve file_id inmediatamente)
                 const res = await fetch(`/download-selected?url=${encodeURIComponent(currentUrl)}&format_id=${encodeURIComponent(selectedFormatId)}`);
                 if (!res.ok) throw await res.json();
+                const { file_id } = await res.json();
 
-                const blob = await res.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
+                // 2. Polling de progreso cada 600ms
+                pollInterval = setInterval(async () => {
+                    try {
+                        const prog = await fetch(`/progress/${file_id}`).then(r => r.json());
+                        _updateProgress(prog.percent, prog.status, prog.message);
 
-                const disposition = res.headers.get('Content-Disposition');
-                let filename = "download.mp4";
-                if (disposition && disposition.includes('filename=')) {
-                    filename = disposition.split('filename=')[1].replace(/['"]/g, '');
-                }
-                a.download = filename;
+                        if (prog.status === 'ready') {
+                            clearInterval(pollInterval);
+                            clearInterval(mergeAnimInterval);
+                            _updateProgress(100, 'ready', '✅ ¡Listo! Iniciando descarga...');
 
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
+                            // 3. Pequeña pausa visual y luego descargar
+                            setTimeout(() => {
+                                window.location.href = `/get-file/${file_id}`;
+                                setTimeout(() => {
+                                    modal.classList.add('hidden');
+                                    ui.dlBtn.disabled = false;
+                                    document.getElementById('btnText').innerText = '✅ COMPLETE';
+                                    setTimeout(() => { document.getElementById('btnText').innerText = 'INITIATE DOWNLOAD'; }, 3000);
+                                }, 1500);
+                            }, 500);
 
-                // Reset UI
-                ui.results.classList.remove('blur-sm');
-                ui.loading.classList.add('hidden');
-                ui.loading.style = '';
-                document.getElementById('btnText').innerText = "COMPLETE";
+                        } else if (prog.status === 'error') {
+                            clearInterval(pollInterval);
+                            clearInterval(mergeAnimInterval);
+                            modal.classList.add('hidden');
+                            showError(prog.message || 'Error en la descarga.');
+                            ui.dlBtn.disabled = false;
+                            document.getElementById('btnText').innerText = 'INITIATE DOWNLOAD';
+                        }
 
-                setTimeout(() => {
-                    document.getElementById('btnText').innerText = originalText;
-                    ui.dlBtn.disabled = false;
-                    ui.dlBtn.classList.remove('cursor-not-allowed');
-                }, 2000);
+                        // Animar lentamente la fase de merge del 90 al 99
+                        if (prog.status === 'merging' && !mergeAnimInterval) {
+                            let fakePct = prog.percent || 90;
+                            mergeAnimInterval = setInterval(() => {
+                                if (fakePct < 99) {
+                                    fakePct += 0.3;
+                                    _updateProgress(Math.min(fakePct, 99), 'merging', '⚙️ Combinando con FFmpeg...');
+                                }
+                            }, 400);
+                        }
+
+                    } catch (_) { /* ignorar errores de red transitorios */ }
+                }, 600);
 
             } catch (e) {
-                console.error(e);
-                ui.results.classList.remove('blur-sm');
-                ui.loading.classList.add('hidden');
-                ui.loading.style = '';
-                showError(e.detail || "Download failed.");
+                clearInterval(pollInterval);
+                modal.classList.add('hidden');
+                showError(e.detail || 'Error al iniciar la descarga.');
                 ui.dlBtn.disabled = false;
-                ui.dlBtn.classList.remove('cursor-not-allowed');
-                document.getElementById('btnText').innerText = originalText;
+                document.getElementById('btnText').innerText = 'INITIATE DOWNLOAD';
             }
+        }
+
+        // Actualiza la UI del modal de progreso
+        function _updateProgress(percent, status, message) {
+            const bar = document.getElementById('progressBar');
+            const pct = document.getElementById('progressPct');
+            const msg = document.getElementById('progressMsg');
+            const phase = document.getElementById('progressPhase');
+
+            const pctRound = Math.min(Math.round(percent), 100);
+            bar.style.width = pctRound + '%';
+            pct.innerText = pctRound + '%';
+            msg.innerText = message || '';
+
+            // Colores y pasos según fase
+            const steps = ['step1', 'step2', 'step3', 'step4'];
+            steps.forEach(s => document.getElementById(s).classList.replace('text-indigo-400', 'text-gray-500'));
+
+            if (status === 'downloading') {
+                bar.className = 'h-full rounded-full transition-all duration-500 bg-gradient-to-r from-indigo-500 to-purple-500';
+                if (percent < 70) {
+                    phase.innerText = 'Descargando video...';
+                    _activateStep('step1');
+                } else {
+                    phase.innerText = 'Descargando audio...';
+                    _activateStep('step1'); _activateStep('step2');
+                }
+            } else if (status === 'merging') {
+                bar.className = 'h-full rounded-full transition-all duration-500 bg-gradient-to-r from-amber-500 to-orange-500';
+                phase.innerText = 'Combinando con FFmpeg...';
+                _activateStep('step1'); _activateStep('step2'); _activateStep('step3');
+            } else if (status === 'ready') {
+                bar.className = 'h-full rounded-full transition-all duration-500 bg-gradient-to-r from-emerald-500 to-teal-400';
+                phase.innerText = '¡Listo para descargar!';
+                steps.forEach(s => _activateStep(s));
+            }
+        }
+
+        function _activateStep(id) {
+            const el = document.getElementById(id);
+            el.classList.remove('opacity-40');
+            el.classList.add('text-indigo-400');
         }
 
         // Helpers
