@@ -537,4 +537,7 @@ def get_file(file_id: str, background_tasks: BackgroundTasks):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    # En producción (Railway), el puerto se pasa por variable de entorno
+    port = int(os.environ.get("PORT", 8080))
+    # Importante: host="0.0.0.0" para que sea accesible fuera del contenedor
+    uvicorn.run(app, host="0.0.0.0", port=port)
