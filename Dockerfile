@@ -28,8 +28,8 @@ ENV PATH="/home/user/.local/bin:$PATH"
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Exponer el puerto estándar de Hugging Face (7860)
-EXPOSE 7860
+# Exponer el puerto (Railway usa variable de entorno PORT)
+EXPOSE 8080
 
-# Comando para ejecutar la aplicación
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]
+# Comando para ejecutar la aplicación usando el puerto dinámico
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}"]
