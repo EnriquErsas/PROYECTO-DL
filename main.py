@@ -188,40 +188,31 @@ def analyze_video(url: str):
         # Lista de estrategias a intentar en orden de preferencia
         strategies = []
 
-        # ── Con cookies ──────────────────────────────────────────────────────
+        # ── Estrategia 1: tv_embedded SIN cookies (funciona para la mayoría de videos) ──
+        # PRIMERO sin cookies: evita que YouTube marque la IP como sospechosa
+        strategies.append({
+            **base_ydl_opts,
+            'ignoreerrors': True,
+            'extractor_args': {'youtube': {'player_client': ['tv_embedded']}},
+        })
+
+        # ── Con cookies (solo si tv_embedded falló) ─────────────────────────
         if YOUTUBE_COOKIES_FILE:
-            # Estrategia 1: web + cookies → VE todos los formatos DASH (1080p/4K) + autenticado
-            # Es LA combinación correcta: autenticación real + lista completa de formatos
-            strategies.append({
-                **base_ydl_opts,
-                'ignoreerrors': False,
-                'cookiefile': YOUTUBE_COOKIES_FILE,
-                'extractor_args': {'youtube': {
-                    'player_client': ['web'],
-                }},
-            })
-            # Estrategia 2: tv_embedded + cookies → segundo intento con auth
+            # Estrategia 2: web + cookies → para videos que requieren auth
             strategies.append({
                 **base_ydl_opts,
                 'ignoreerrors': True,
                 'cookiefile': YOUTUBE_COOKIES_FILE,
-                'extractor_args': {'youtube': {'player_client': ['tv_embedded']}},
+                'extractor_args': {'youtube': {'player_client': ['web']}},
             })
-            # Estrategia 3: auto + cookies → dejar que yt-dlp elija con auth
+            # Estrategia 3: auto + cookies → dejar que yt-dlp elija
             strategies.append({
                 **base_ydl_opts,
                 'ignoreerrors': True,
                 'cookiefile': YOUTUBE_COOKIES_FILE,
             })
 
-        # ── Sin cookies (fallback para videos públicos) ───────────────────────
-        # Estrategia 4: tv_embedded sin cookies → funciona en videos no restringidos
-        strategies.append({
-            **base_ydl_opts,
-            'ignoreerrors': True,
-            'extractor_args': {'youtube': {'player_client': ['tv_embedded']}},
-        })
-        # Estrategia 5: auto sin cookies → último recurso
+        # ── Último recurso ──────────────────────────────────────────────────
         strategies.append({
             **base_ydl_opts,
             'ignoreerrors': False,
