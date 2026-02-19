@@ -215,7 +215,15 @@ def analyze_video(url: str):
                 'cookiefile': YOUTUBE_COOKIES_FILE,
                 'extractor_args': {'youtube': {'player_client': ['android']}},
             })
-            # Estrategia 4: web + cookies sin restricciones adicionales
+            # Estrategia 4: mweb + cookies (Mobile Web - robusto)
+            strategies.append({
+                **base_ydl_opts,
+                'ignoreerrors': True,
+                'check_formats': False,
+                'cookiefile': YOUTUBE_COOKIES_FILE,
+                'extractor_args': {'youtube': {'player_client': ['mweb']}},
+            })
+            # Estrategia 5: web + cookies sin restricciones adicionales
             strategies.append({
                 **base_ydl_opts,
                 'ignoreerrors': True,
@@ -313,21 +321,27 @@ def analyze_video(url: str):
                 resolution_key = f"{height}p"
 
                 # Calcular tamaño de VIDEO
-                # Prioridad: filesize > filesize_approx > (vbr * duration)
+                # Prioridad REVISADA: filesize (exacto) > BR Calculado (mas preciso que approx) > filesize_approx
                 v_size = f.get('filesize')
-                if not v_size:
-                    v_size = f.get('filesize_approx')
                 
-                # Si sigue sin haber tamaño, intentar calcular por bitrate
                 if not v_size:
-                    vbr = f.get('vbr') or f.get('tbr')
+                    # Calcular por bitrate (TBR = Total Bitrate en kbits/s)
+                    tbr = f.get('tbr') or f.get('vbr')
                     duration_sec = info.get('duration')
-                    if vbr and duration_sec:
-                        v_size = (vbr * 1000 / 8) * duration_sec
+                    if tbr and duration_sec:
+                        # kbps -> bytes/sec: (tbr * 1000) / 8
+                        v_size = (tbr * 1000 / 8) * duration_sec
+                
+                if not v_size:
+                     v_size = f.get('filesize_approx')
                 
                 v_size = v_size or 0
 
-                # Sumar audio
+                # Sumar audio solo si NO usamos TBR (porque TBR ya incluye audio usualmente si es del container, 
+                # pero en DASH streams raw tbr es solo video? yt-dlp tbr suele ser video+audio target... 
+                # PROBEMOS: Si calculamos por TBR, asumimos que es el total del stream video.
+                # Si es DASH video-only, tbr es video bitrate. Necesitamos sumar audio.
+                
                 total_size = v_size + audio_size_bytes
                 size_str = format_size(total_size) if total_size > 0 else "N/A"
 
