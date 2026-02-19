@@ -188,31 +188,38 @@ def analyze_video(url: str):
         # Lista de estrategias a intentar en orden de preferencia
         strategies = []
 
-        # ── Estrategia 1: tv_embedded SIN cookies (funciona para la mayoría de videos) ──
-        # PRIMERO sin cookies: evita que YouTube marque la IP como sospechosa
+        # La IP de Railway está flaggeada → NECESITAMOS cookies
+        # ── Con cookies (prioridad máxima) ─────────────────────────
+        if YOUTUBE_COOKIES_FILE:
+            # Estrategia 1: web + cookies + nodejs → COMBO COMPLETO
+            # Autentica con cookies + descifra URLs con Node.js
+            strategies.append({
+                **base_ydl_opts,
+                'ignoreerrors': True,
+                'cookiefile': YOUTUBE_COOKIES_FILE,
+                'extractor_args': {'youtube': {
+                    'player_client': ['web'],
+                    'js_runtimes': ['nodejs'],
+                }},
+            })
+            # Estrategia 2: auto + cookies + nodejs
+            strategies.append({
+                **base_ydl_opts,
+                'ignoreerrors': True,
+                'cookiefile': YOUTUBE_COOKIES_FILE,
+                'extractor_args': {'youtube': {
+                    'js_runtimes': ['nodejs'],
+                }},
+            })
+
+        # ── Sin cookies (para videos que no lo requieran) ─────────
         strategies.append({
             **base_ydl_opts,
             'ignoreerrors': True,
             'extractor_args': {'youtube': {'player_client': ['tv_embedded']}},
         })
 
-        # ── Con cookies (solo si tv_embedded falló) ─────────────────────────
-        if YOUTUBE_COOKIES_FILE:
-            # Estrategia 2: web + cookies → para videos que requieren auth
-            strategies.append({
-                **base_ydl_opts,
-                'ignoreerrors': True,
-                'cookiefile': YOUTUBE_COOKIES_FILE,
-                'extractor_args': {'youtube': {'player_client': ['web']}},
-            })
-            # Estrategia 3: auto + cookies → dejar que yt-dlp elija
-            strategies.append({
-                **base_ydl_opts,
-                'ignoreerrors': True,
-                'cookiefile': YOUTUBE_COOKIES_FILE,
-            })
-
-        # ── Último recurso ──────────────────────────────────────────────────
+        # ── Último recurso ────────────────────────────────────────
         strategies.append({
             **base_ydl_opts,
             'ignoreerrors': False,
