@@ -174,6 +174,7 @@ def analyze_video(url: str):
         print(f"URL final a analizar: {target_url}")
 
         # Base de opciones comunes para todos los intentos
+        # js_runtimes como dict a nivel raíz (formato requerido por yt-dlp Python API)
         base_ydl_opts = {
             'quiet': True,
             'no_warnings': True,
@@ -183,7 +184,8 @@ def analyze_video(url: str):
             'geo_bypass': True,
             'socket_timeout': 20,
             'check_formats': False,
-            'remote_components': {'ejs:github'},  # Descargar EJS scripts desde GitHub
+            'remote_components': {'ejs:github'},
+            'js_runtimes': {'nodejs': {}},  # ← Formato correcto para Python API
         }
 
         # Lista de estrategias a intentar en orden de preferencia
@@ -192,24 +194,18 @@ def analyze_video(url: str):
         # La IP de Railway está flaggeada → NECESITAMOS cookies
         # ── Con cookies (prioridad máxima) ─────────────────────────
         if YOUTUBE_COOKIES_FILE:
-            # Estrategia 1: web + cookies + nodejs → COMBO COMPLETO
+            # Estrategia 1: web + cookies + nodejs
             strategies.append({
                 **base_ydl_opts,
                 'ignoreerrors': True,
                 'cookiefile': YOUTUBE_COOKIES_FILE,
-                'extractor_args': {'youtube': {
-                    'player_client': ['web'],
-                    'js_runtimes': ['nodejs'],
-                }},
+                'extractor_args': {'youtube': {'player_client': ['web']}},
             })
             # Estrategia 2: auto + cookies + nodejs
             strategies.append({
                 **base_ydl_opts,
                 'ignoreerrors': True,
                 'cookiefile': YOUTUBE_COOKIES_FILE,
-                'extractor_args': {'youtube': {
-                    'js_runtimes': ['nodejs'],
-                }},
             })
 
         # ── Sin cookies (para videos que no lo requieran) ─────────
@@ -380,9 +376,9 @@ def download_selected(url: str, format_id: str):
             'merge_output_format': 'mp4',
             'postprocessor_args': {
                 'ffmpeg': [
-                    '-c', 'copy',        # Copiar streams sin re-procesar (Ultra rápido)
-                    '-map', '0:v:0',     # Mapear primer video
-                    '-map', '1:a:0',     # Mapear primer audio
+                    '-c', 'copy',
+                    '-map', '0:v:0',
+                    '-map', '1:a:0',
                     '-shortest'
                 ]
             }
