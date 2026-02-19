@@ -312,22 +312,50 @@ def analyze_video(url: str):
 
                 resolution_key = f"{height}p"
 
-                # Tamaño real = video + audio (porque siempre se descargan y fusionan)
-                video_size = f.get('filesize') or f.get('filesize_approx') or 0
-                total_size = video_size + audio_size_bytes
+                # Calcular tamaño de VIDEO
+                # Prioridad: filesize > filesize_approx > (vbr * duration)
+                v_size = f.get('filesize')
+                if not v_size:
+                    v_size = f.get('filesize_approx')
+                
+                # Si sigue sin haber tamaño, intentar calcular por bitrate
+                if not v_size:
+                    vbr = f.get('vbr') or f.get('tbr')
+                    duration_sec = info.get('duration')
+                    if vbr and duration_sec:
+                        v_size = (vbr * 1000 / 8) * duration_sec
+                
+                v_size = v_size or 0
+
+                # Sumar audio
+                total_size = v_size + audio_size_bytes
                 size_str = format_size(total_size) if total_size > 0 else "N/A"
+
+                # Simplificar codec para mostrar al usuario
+                codec_label = "MP4"
+                if "avc1" in vcodec or "h264" in vcodec:
+                    codec_label = "H.264"
+                elif "vp9" in vcodec:
+                    codec_label = "VP9"
+                elif "av01" in vcodec:
+                    codec_label = "AV1"
+                
+                # Label más descriptivo: "1080p (H.264) - MP4"
+                label = f"{resolution_key} ({codec_label})"
 
                 video_formats.append({
                     "format_id": format_id,
                     "extension": "mp4",
                     "resolution": resolution_key,
                     "filesize_str": size_str,
-                    "label": f"{resolution_key} - MP4",
-                    "is_video": True
+                    "label": label,
+                    "is_video": True,
+                    "height": height, # Guardamos height para ordernar mejor
+                    "tbr": f.get('tbr') or 0 # Guardamos bitrate para ordenar mejor
                 })
 
-        # Ordenar videos por altura (resolución)
-        video_formats.sort(key=lambda x: int(x['resolution'].replace('p', '')), reverse=True)
+        # Ordenar videos por altura (resolución) DESC, luego por bitrate (tbr) DESC
+        video_formats.sort(key=lambda x: (x.get('height', 0), x.get('tbr', 0)), reverse=True)
 
         # Opción de Audio (MP3)
         best_audio = next((f for f in raw_formats if f.get('vcodec') == 'none'), None)
