@@ -150,20 +150,23 @@ def analyze_video(url: str):
 
         # Configuración de yt-dlp para extracción robusta y máxima calidad
         ydl_opts = {
-            'quiet': True,
-            'no_warnings': True,
+            'quiet': False,  # Mostrar logs para depuración
+            'no_warnings': False,
             'noplaylist': True,
             'extract_flat': False,
             'nocheckcertificate': True,
-            'ignoreerrors': True,
+            'ignoreerrors': False,  # No silenciar errores durante análisis
             'geo_bypass': True,
-            'socket_timeout': 15,
-            # CRUCIAL: Agregar 'web' para obtener calidades 1080p+ que en móvil son limitadas
+            'socket_timeout': 20,
+            # tv_embedded bypasea la detección de IP servidor de YouTube
+            # y devuelve la lista completa de formatos incluyendo 1080p/4K
             'extractor_args': {
                 'youtube': {
-                    'player_client': ['web', 'mweb', 'android', 'ios'],
+                    'player_client': ['tv_embedded', 'ios'],
                 }
             },
+            # Incluir manifiestos DASH (necesarios para 1080p+)
+            'youtube_include_dash_manifest': True,
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -205,12 +208,19 @@ def analyze_video(url: str):
             # Set para deduplicación por resolución (Video)
             seen_resolutions = set()
 
-            # Ordenar primero por filesize/bitrate descendente para que al iterar nos quedemos con la mejor version de cada resolución
-            # Usamos tbr (total bitrate) como proxy de calidad si filesize falla
+            # Ordenar por ALTURA (resolución) primero, luego por bitrate
+            # Esto garantiza que para cada resolución nos quedamos con el mejor formato
             def quality_key(f):
-                return (f.get('tbr') or 0, f.get('filesize') or 0)
+                height = f.get('height') or 0
+                tbr = f.get('tbr') or 0
+                filesize = f.get('filesize') or 0
+                return (height, tbr, filesize)
             
             raw_formats.sort(key=quality_key, reverse=True)
+            print(f"Total de formatos encontrados por yt-dlp: {len(raw_formats)}")
+            # Imprimir resumen de formatos para depuración
+            for fmt in raw_formats[:10]:
+                print(f"  Format: {fmt.get('format_id')} | {fmt.get('height')}p | vcodec={fmt.get('vcodec')} | acodec={fmt.get('acodec')} | ext={fmt.get('ext')}")
 
             for f in raw_formats:
                 if not f: continue
