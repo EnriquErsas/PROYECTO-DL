@@ -182,6 +182,7 @@ def analyze_video(url: str):
             'nocheckcertificate': True,
             'geo_bypass': True,
             'socket_timeout': 20,
+            'check_formats': False,  # No verificar URLs de formatos (requiere JS runtime)
         }
 
         # Lista de estrategias a intentar en orden de preferencia
@@ -195,7 +196,9 @@ def analyze_video(url: str):
                 **base_ydl_opts,
                 'ignoreerrors': False,
                 'cookiefile': YOUTUBE_COOKIES_FILE,
-                'extractor_args': {'youtube': {'player_client': ['web']}},
+                'extractor_args': {'youtube': {
+                    'player_client': ['web'],
+                }},
             })
             # Estrategia 2: tv_embedded + cookies → segundo intento con auth
             strategies.append({

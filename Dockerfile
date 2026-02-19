@@ -5,9 +5,12 @@ FROM python:3.10-slim
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Instalar dependencias del sistema necesarias (FFmpeg es CRÍTICO)
+# Instalar dependencias del sistema necesarias (FFmpeg + Node.js para yt-dlp)
 RUN apt-get update && apt-get install -y \
     ffmpeg \
+    curl \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 # Crear un usuario no-root para seguridad (Requisito de HF Spaces)
