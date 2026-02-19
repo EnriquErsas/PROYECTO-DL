@@ -173,58 +173,76 @@ def analyze_video(url: str):
         
         print(f"URL final a analizar: {target_url}")
 
-        # Configuración de yt-dlp para extracción robusta y máxima calidad
-        ydl_opts = {
+        # Base de opciones comunes para todos los intentos
+        base_ydl_opts = {
             'quiet': True,
             'no_warnings': True,
             'noplaylist': True,
             'extract_flat': False,
             'nocheckcertificate': True,
-            'ignoreerrors': True,
             'geo_bypass': True,
             'socket_timeout': 20,
-            # NO incluir youtube_include_dash_manifest → causaba error 'format not available' en analyze
         }
 
-        # Lógica de cliente según disponibilidad de cookies
-        if YOUTUBE_COOKIES_FILE:
-            # Con cookies: usar cliente 'ios' → más estable, no verifica formatos en analyze
-            # (el cliente 'web' con cookies causa "Requested format is not available")
-            ydl_opts['cookiefile'] = YOUTUBE_COOKIES_FILE
-            ydl_opts['extractor_args'] = {
-                'youtube': {'player_client': ['ios', 'android']}
-            }
-            print(f"[INFO] Modo autenticado (cookies+ios) → para: {target_url}")
-        else:
-            # Sin cookies: tv_embedded es el más tolerante en IPs de servidor
-            ydl_opts['extractor_args'] = {
-                'youtube': {'player_client': ['tv_embedded', 'ios']}
-            }
-            print("[WARN] Sin cookies → cliente tv_embedded")
+        # Lista de estrategias a intentar en orden
+        strategies = []
 
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        # Estrategia 1: tv_embedded SIN cookies (más permisivo en servidores)
+        strategies.append({
+            **base_ydl_opts,
+            'ignoreerrors': True,
+            'extractor_args': {'youtube': {'player_client': ['tv_embedded']}},
+        })
+
+        # Estrategia 2: ios + cookies (si están disponibles)
+        if YOUTUBE_COOKIES_FILE:
+            strategies.append({
+                **base_ydl_opts,
+                'ignoreerrors': True,
+                'cookiefile': YOUTUBE_COOKIES_FILE,
+                'extractor_args': {'youtube': {'player_client': ['ios']}},
+            })
+            # Estrategia 3: android + cookies
+            strategies.append({
+                **base_ydl_opts,
+                'ignoreerrors': True,
+                'cookiefile': YOUTUBE_COOKIES_FILE,
+                'extractor_args': {'youtube': {'player_client': ['android']}},
+            })
+
+        # Estrategia final: sin cliente específico, dejar que yt-dlp decida
+        strategies.append({
+            **base_ydl_opts,
+            'ignoreerrors': False,  # Mostrar error real
+        })
+
+        info = None
+        for i, ydl_opts in enumerate(strategies):
+            client = ydl_opts.get('extractor_args', {}).get('youtube', {}).get('player_client', ['auto'])
+            has_cookies = 'cookiefile' in ydl_opts
+            print(f"[INFO] Intento {i+1}/{len(strategies)}: cliente={client}, cookies={has_cookies}")
             try:
-                info = ydl.extract_info(target_url, download=False)
-                # Si la URL resuelta falla (ej: m3u8 con token caducado → HTTP 400),
-                # yt-dlp devuelve None en vez de lanzar excepción (por ignoreerrors=True)
-                if not info and target_url != url:
-                    print(f"URL resuelta devolvió None, reintentando con URL original: {url}")
-                    info = ydl.extract_info(url, download=False)
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(target_url, download=False)
+                if info:
+                    print(f"[INFO] ✅ Éxito con estrategia {i+1}")
+                    break
+                else:
+                    print(f"[WARN] Estrategia {i+1} devolvió None, probando siguiente...")
+            except HTTPException:
+                raise
             except Exception as e:
                 error_str = str(e)
-                # Detectar errores de DNS / red → el servidor bloquea ese dominio
+                print(f"[WARN] Estrategia {i+1} falló: {error_str[:200]}")
+                # Detectar errores de DNS / red
                 if 'NameResolutionError' in error_str or 'Failed to resolve' in error_str or 'No address associated' in error_str:
                     from urllib.parse import urlparse
                     domain = urlparse(url).netloc
                     raise HTTPException(
                         status_code=503,
-                        detail=f"El servidor no puede conectarse a '{domain}'. Este dominio puede estar bloqueado en el entorno de ejecución."
+                        detail=f"El servidor no puede conectarse a '{domain}'. Este dominio puede estar bloqueado."
                     )
-                print(f"Fallo con URL resuelta ({target_url}), intentando original ({url}): {e}")
-                if target_url != url:
-                    info = ydl.extract_info(url, download=False)
-                else:
-                    raise e
+                continue
             
             if not info:
                  raise HTTPException(status_code=404, detail="No se pudo extraer información del video.")
