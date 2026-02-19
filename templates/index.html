@@ -583,7 +583,16 @@
 
             try {
                 // 1. Iniciar descarga en backend (devuelve file_id inmediatamente)
-                const res = await fetch(`/download-selected?url=${encodeURIComponent(currentUrl)}&format_id=${encodeURIComponent(selectedFormatId)}`);
+                // Usar la estrategia exitosa detectada en analysis
+                let strategyParams = '';
+                if (currentData && currentData.strategy) {
+                    const s = currentData.strategy;
+                    const clientStr = (s.client && Array.isArray(s.client)) ? s.client.join(',') : 'null';
+                    const cookiesStr = s.cookies ? 'true' : 'false';
+                    strategyParams = `&client=${encodeURIComponent(clientStr)}&use_cookies=${cookiesStr}`;
+                }
+
+                const res = await fetch(`/download-selected?url=${encodeURIComponent(currentUrl)}&format_id=${encodeURIComponent(selectedFormatId)}${strategyParams}`);
                 if (!res.ok) throw await res.json();
                 const { file_id } = await res.json();
 

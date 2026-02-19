@@ -19,8 +19,11 @@ app = FastAPI()
 
 # Directorios
 BASE_DIR = Path(__file__).resolve().parent
-# En Hugging Face/Docker, /tmp es siempre escribible
-DOWNLOAD_DIR = Path("/tmp/downloads")
+# En Hugging Face/Docker, /tmp es siempre escribible. En Windows, usar carpeta local.
+if os.name == 'nt':
+    DOWNLOAD_DIR = BASE_DIR / "downloads"
+else:
+    DOWNLOAD_DIR = Path("/tmp/downloads")
 TEMPLATE_DIR = BASE_DIR / "templates"
 
 # Asegurar directorios
@@ -228,6 +231,8 @@ def analyze_video(url: str):
         })
 
         info = None
+        success_strategy = {"client": ["auto"], "cookies": False} # Default
+
         for i, ydl_opts in enumerate(strategies):
             client = ydl_opts.get('extractor_args', {}).get('youtube', {}).get('player_client', ['auto'])
             has_cookies = 'cookiefile' in ydl_opts
@@ -237,6 +242,7 @@ def analyze_video(url: str):
                     info = ydl.extract_info(target_url, download=False)
                 if info:
                     print(f"[INFO] ✅ Éxito con estrategia {i+1}")
+                    success_strategy = {"client": client, "cookies": has_cookies}
                     break
                 else:
                     print(f"[WARN] Estrategia {i+1} devolvió None, probando siguiente...")
@@ -345,7 +351,8 @@ def analyze_video(url: str):
             "videos": video_formats,
             "audios": audio_formats,
             "url": target_url,
-            "original_url": url
+            "original_url": url,
+            "strategy": success_strategy
         }
 
     except HTTPException:
@@ -358,12 +365,24 @@ def analyze_video(url: str):
         raise HTTPException(status_code=500, detail=f"Error al analizar el video: {str(e)}")
 
 @app.get("/download-selected")
-def download_selected(url: str, format_id: str):
+def download_selected(url: str, format_id: str, client: str = None, use_cookies: str = 'true'):
     """Inicia la descarga en background y devuelve un file_id para seguir el progreso."""
     if not url or not format_id:
         raise HTTPException(status_code=400, detail="URL y format_id requeridos")
 
     file_id = str(uuid.uuid4())
+
+    # Procesar parámetros de estrategia
+    use_cookies_bool = use_cookies.lower() == 'true'
+    
+    # Determinar cliente
+    # Si viene del frontend, usarlo. Si no, fallback al default robusto.
+    if client and client != 'null':
+        target_clients = [client] if ',' not in client else client.split(',')
+    else:
+        target_clients = ['tv_embedded', 'android', 'ios', 'mweb']
+
+    print(f"[INFO] Iniciando descarga ({file_id}) con cliente={target_clients} cookies={use_cookies_bool}")
 
     # Configuración base con EJS y Node.js para evitar el bot en la descarga también
     base_opts = {
@@ -374,9 +393,9 @@ def download_selected(url: str, format_id: str):
         'geo_bypass': True,
         'retries': 10,
         'outtmpl': str(DOWNLOAD_DIR / f"{file_id}.%(ext)s"),
-        'cookiefile': YOUTUBE_COOKIES_FILE if YOUTUBE_COOKIES_FILE else None,
+        'cookiefile': YOUTUBE_COOKIES_FILE if (YOUTUBE_COOKIES_FILE and use_cookies_bool) else None,
         'js_runtimes': {'nodejs': {}},
-        'extractor_args': {'youtube': {'player_client': ['tv_embedded', 'android', 'ios', 'mweb']}}, # Fallback múltiple en descarga
+        'extractor_args': {'youtube': {'player_client': target_clients}},
     }
 
     ydl_opts = {**base_opts}
