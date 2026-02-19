@@ -183,22 +183,24 @@ def analyze_video(url: str):
             'ignoreerrors': True,
             'geo_bypass': True,
             'socket_timeout': 20,
-            # tv_embedded bypasea la detección de IP servidor de YouTube
-            'extractor_args': {
-                'youtube': {
-                    'player_client': ['tv_embedded', 'ios'],
-                }
-            },
             # Incluir manifiestos DASH (necesarios para 1080p+)
             'youtube_include_dash_manifest': True,
         }
 
-        # Agregar cookies si están disponibles (CRUCIAL para evitar bot detection en IPs de servidor)
+        # Lógica de cliente según disponibilidad de cookies
         if YOUTUBE_COOKIES_FILE:
+            # Con cookies: usar cliente 'web' estándar → da lista completa de formatos (1080p/4K)
             ydl_opts['cookiefile'] = YOUTUBE_COOKIES_FILE
-            print(f"[INFO] Usando cookies para: {target_url}")
+            ydl_opts['extractor_args'] = {
+                'youtube': {'player_client': ['web', 'ios', 'android']}
+            }
+            print(f"[INFO] Modo autenticado (cookies) → cliente web para: {target_url}")
         else:
-            print("[WARN] Sin cookies - YouTube puede bloquear esta solicitud en IPs de servidor.")
+            # Sin cookies: usar tv_embedded que a veces funciona en IPs de servidor
+            ydl_opts['extractor_args'] = {
+                'youtube': {'player_client': ['tv_embedded', 'ios']}
+            }
+            print("[WARN] Sin cookies → cliente tv_embedded (formatos limitados posibles)")
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             try:
