@@ -156,10 +156,16 @@ def analyze_video(url: str):
             'no_warnings': True,
             'noplaylist': True,
             'extract_flat': False,
-            'http_headers': DEFAULT_HEADERS,
             'nocheckcertificate': True,
             'ignoreerrors': True,
             'geo_bypass': True,
+            'socket_timeout': 15,
+            # CRUCIAL: Usar identidad de Android para evitar bloqueo 403 en servidores (AWS/HF)
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['android', 'ios'],
+                }
+            },
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
