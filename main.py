@@ -298,9 +298,9 @@ def analyze_video(url: str):
 
                 resolution_key = f"{height}p"
 
-                if resolution_key in seen_resolutions:
-                    continue
-                seen_resolutions.add(resolution_key)
+                # if resolution_key in seen_resolutions:
+                #     continue
+                # seen_resolutions.add(resolution_key)
 
                 video_formats.append({
                     "format_id": format_id,
