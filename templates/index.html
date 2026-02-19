@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sygnal Downloader // Pro Interface</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        glass: 'rgba(255, 255, 255, 0.03)',
+                        glassBorder: 'rgba(255, 255, 255, 0.08)',
+                        accent: '#6366f1',
+                        accentGlow: 'rgba(99, 102, 241, 0.5)',
+                        success: '#10b981',
+                    },
+                    animation: {
+                        'blob': 'blob 10s infinite',
+                        'scan': 'scan 2s linear infinite',
+                        'pulse-glow': 'pulseGlow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    },
+                    keyframes: {
+                        blob: {
+                            '0%': { transform: 'translate(0px, 0px) scale(1)' },
+                            '33%': { transform: 'translate(30px, -50px) scale(1.1)' },
+                            '66%': { transform: 'translate(-20px, 20px) scale(0.9)' },
+                            '100%': { transform: 'translate(0px, 0px) scale(1)' },
+                        },
+                        scan: {
+                            '0%': { top: '0%' },
+                            '50%': { top: '100%' },
+                            '100%': { top: '0%' },
+                        },
+                        pulseGlow: {
+                            '0%, 100%': { opacity: '1', boxShadow: '0 0 20px rgba(99, 102, 241, 0.3)' },
+                            '50%': { opacity: '.8', boxShadow: '0 0 10px rgba(99, 102, 241, 0.1)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Fonts & Icons -->
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body {
+            background-color: #050505;
+            overflow-x: hidden;
+        }
+
+        .mesh-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            background: radial-gradient(circle at 50% 50%, #111 0%, #000 100%);
+            overflow: hidden;
+        }
+
+        .mesh-blob {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.4;
+        }
+
+        .glass-panel {
+            background: rgba(20, 20, 25, 0.6);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        .format-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .format-card:hover {
+            transform: translateY(-2px);
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(99, 102, 241, 0.4);
+            box-shadow: 0 10px 30px -10px rgba(99, 102, 241, 0.2);
+        }
+
+        .format-card.selected {
+            background: rgba(99, 102, 241, 0.15);
+            border-color: #6366f1;
+            box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
+        }
+
+        .scan-line {
+            position: absolute;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: #6366f1;
+            box-shadow: 0 0 10px #6366f1, 0 0 20px #6366f1;
+            z-index: 10;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #0a0a0a;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
+</head>
+
+<body class="text-gray-200 font-sans min-h-screen flex flex-col items-center">
+
+    <!-- Ambient Background -->
+    <div class="mesh-bg">
+        <div class="mesh-blob bg-indigo-900 w-96 h-96 top-0 left-0 animate-blob"></div>
+        <div class="mesh-blob bg-purple-900 w-96 h-96 bottom-0 right-0 animate-blob animation-delay-2000"></div>
+        <div
+            class="mesh-blob bg-blue-900 w-80 h-80 top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 animate-blob animation-delay-4000">
+        </div>
+    </div>
+
+    <!-- Header -->
+    <header
+        class="w-full py-6 px-8 flex justify-between items-center z-10 glass-panel sticky top-0 border-b border-white/5">
+        <div class="flex items-center gap-3">
+            <div
+                class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                <i class="fa-solid fa-bolt text-white text-lg"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-xl tracking-tight text-white">SYGNAL <span
+                        class="text-indigo-400 font-light">DL</span></h1>
+                <p class="text-xs text-gray-400 font-mono tracking-widest uppercase">High Performance Core</p>
+            </div>
+        </div>
+
+        <div class="flex gap-4">
+            <button
+                class="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors border border-white/5">
+                <i class="fa-brands fa-github text-gray-400"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="w-full max-w-5xl px-4 py-12 flex-grow flex flex-col items-center relative z-0">
+
+        <!-- Search Section -->
+        <div id="searchSection" class="w-full max-w-3xl flex flex-col items-center transition-all duration-500">
+            <h2
+                class="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-200 to-gray-400 text-center mb-4 pb-2">
+                Initialize Extraction via URL
+            </h2>
+            <p class="text-gray-400 mb-10 text-center max-w-lg">
+                Soporte avanzado de protocolos. Bypass de iframes activo. Extracción HLS nativa.
+            </p>
+
+            <div class="w-full relative group">
+                <div
+                    class="absolute -inset-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-2xl opacity-30 group-hover:opacity-60 blur transition duration-500">
+                </div>
+                <div class="relative flex items-center bg-[#0a0a0f] border border-white/10 rounded-2xl p-2 shadow-2xl">
+                    <div class="pl-4 pr-3 text-indigo-500">
+                        <i class="fa-solid fa-link"></i>
+                    </div>
+                    <input type="text" id="urlInput" placeholder="https://..."
+                        class="w-full bg-transparent border-none text-white text-lg focus:ring-0 placeholder-gray-600 font-mono py-4">
+                    <button onclick="analyzeUrl()"
+                        class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-8 rounded-xl transition-all shadow-lg shadow-indigo-500/30 flex items-center gap-2 group-hover:scale-105 active:scale-95 mx-2">
+                        <span>ANALYZE</span>
+                        <i class="fa-solid fa-arrow-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scanning/Loading Overlay -->
+        <div id="loadingOverlay"
+            class="hidden w-full max-w-3xl mt-12 glass-panel rounded-2xl p-8 flex flex-col items-center justify-center relative overflow-hidden h-64 border border-indigo-500/30">
+            <div class="absolute inset-0 bg-indigo-500/5 z-0"></div>
+            <div class="scan-line animate-scan"></div>
+
+            <div class="relative z-10 font-mono text-center">
+                <div class="text-4xl mb-4 text-indigo-400"><i class="fa-solid fa-satellite-dish fa-bounce"></i></div>
+                <h3 class="text-xl font-bold text-white mb-2">SCANNING PROTOCOLS</h3>
+                <p id="loadingText" class="text-indigo-300 text-sm animate-pulse">Resolving target handshake...</p>
+                <div class="mt-4 flex gap-1 justify-center">
+                    <span class="w-2 h-2 bg-indigo-500 rounded-full animate-ping"></span>
+                    <span class="w-2 h-2 bg-indigo-500 rounded-full animate-ping delay-75"></span>
+                    <span class="w-2 h-2 bg-indigo-500 rounded-full animate-ping delay-150"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div id="resultsSection" class="hidden w-full transition-all duration-500 animate-slide-up">
+            <button onclick="reset()"
+                class="mb-6 flex items-center text-gray-400 hover:text-white transition-colors gap-2 text-sm font-mono uppercase tracking-wider">
+                <i class="fa-solid fa-chevron-left"></i> Return to Search
+            </button>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                <!-- Video Preview -->
+                <div class="lg:col-span-5 flex flex-col gap-6">
+                    <div class="relative rounded-2xl overflow-hidden glass-panel border border-white/10 group">
+                        <img id="thumbnail" src="" alt="Thumbnail"
+                            class="w-full aspect-video object-cover opacity-90 group-hover:opacity-100 transition-opacity">
+                        <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent">
+                        </div>
+                        <div class="absolute bottom-4 left-4 right-4">
+                            <h2 id="videoTitle"
+                                class="text-white font-bold text-lg leading-tight drop-shadow-md line-clamp-2"></h2>
+                            <div class="flex gap-3 mt-2 text-xs font-mono text-gray-300">
+                                <span id="videoDuration"
+                                    class="bg-black/50 px-2 py-1 rounded border border-white/10"></span>
+                                <span
+                                    class="bg-indigo-500/20 text-indigo-300 px-2 py-1 rounded border border-indigo-500/20">SECURE</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Selected Info Panel -->
+                    <div class="glass-panel p-6 rounded-2xl border border-white/10 relative overflow-hidden">
+                        <div class="absolute top-0 right-0 p-4 opacity-10 text-6xl text-white"><i
+                                class="fa-solid fa-file-arrow-down"></i></div>
+                        <h3 class="text-gray-400 text-xs font-mono uppercase mb-4 tracking-widest">Target Selection</h3>
+
+                        <div class="flex items-end justify-between mb-4">
+                            <div>
+                                <div id="selectedFormatLabel" class="text-3xl font-bold text-white">Select Format</div>
+                                <div id="selectedFormatSize" class="text-indigo-400 font-mono text-sm mt-1">Waiting
+                                    input...</div>
+                            </div>
+                            <div class="text-right">
+                                <div id="selectedExtension"
+                                    class="text-gray-500 text-sm font-bold uppercase border border-gray-700 px-2 py-1 rounded">
+                                    ---</div>
+                            </div>
+                        </div>
+
+                        <button id="downloadBtn" onclick="executeDownload()" disabled
+                            class="w-full bg-gray-800 text-gray-500 font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-3 disabled:cursor-not-allowed group relative overflow-hidden">
+                            <div
+                                class="absolute inset-0 bg-gradient-to-r from-indigo-600 to-purple-600 translate-y-full group-hover:translate-y-0 transition-transform duration-300 z-0">
+                            </div>
+                            <span class="relative z-10 flex items-center gap-2">
+                                <i class="fa-solid fa-download"></i> <span id="btnText">INITIATE DOWNLOAD</span>
+                            </span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Formats Grid -->
+                <div class="lg:col-span-7">
+                    <!-- Tab Header Injected Here via JS -->
+                    <div id="tabsContainer" class="mb-5"></div>
+
+                    <div id="formatsGrid"
+                        class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+                        <!-- Format Cards Injected Here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error Toast -->
+        <div id="errorToast"
+            class="fixed bottom-8 right-8 bg-red-900/90 backdrop-blur border border-red-500 text-white px-6 py-4 rounded-xl shadow-2xl transform translate-y-20 opacity-0 transition-all duration-300 z-50 flex items-center gap-4">
+            <div class="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center text-red-400">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <div>
+                <h4 class="font-bold text-sm uppercase">System Error</h4>
+                <p id="errorMsg" class="text-xs text-red-200 mt-1 max-w-xs"></p>
+            </div>
+            <button onclick="hidError()" class="text-red-300 hover:text-white"><i
+                    class="fa-solid fa-xmark"></i></button>
+        </div>
+
+    </main>
+
+    <!-- Recent History (Local Only) -->
+    <div id="historyBar" class="w-full glass-panel border-t border-white/5 py-4 px-8 mt-auto z-10">
+        <div class="container mx-auto">
+            <h4 class="text-xs font-mono text-gray-500 uppercase tracking-widest mb-3">Local Session History</h4>
+            <div id="historyList" class="flex gap-4 overflow-x-auto pb-2 custom-scrollbar">
+                <div class="text-gray-600 text-xs italic">No downloads in this session.</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentUrl = '';
+        let selectedFormatId = null;
+        let sessionHistory = [];
+        let currentData = null; // Store analyzed data
+        let currentTab = 'video'; // video | audio
+
+        // Elements
+        const ui = {
+            search: document.getElementById('searchSection'),
+            loading: document.getElementById('loadingOverlay'),
+            results: document.getElementById('resultsSection'),
+            input: document.getElementById('urlInput'),
+            grid: document.getElementById('formatsGrid'),
+            dlBtn: document.getElementById('downloadBtn'),
+            selLabel: document.getElementById('selectedFormatLabel'),
+            selSize: document.getElementById('selectedFormatSize'),
+            selExt: document.getElementById('selectedExtension'),
+            history: document.getElementById('historyList'),
+            error: document.getElementById('errorToast'),
+            // tabs
+            tabsContainer: document.getElementById('tabsContainer')
+        };
+
+        async function analyzeUrl() {
+            const url = ui.input.value.trim();
+            if (!url) return;
+            currentUrl = url;
+
+            setLoading(true, "Intercepting signal streams...");
+            ui.error.classList.add('translate-y-20', 'opacity-0');
+
+            try {
+                const res = await fetch(`/analyze?url=${encodeURIComponent(url)}`);
+                if (!res.ok) throw await res.json();
+
+                const data = await res.json();
+                currentData = data; // Save data
+                renderResults(data);
+                addToHistory(data);
+            } catch (e) {
+                console.error(e);
+                showError(e.detail || "Connection terminated by remote host.");
+                setLoading(false);
+            }
+        }
+
+        function renderResults(data) {
+            setLoading(false);
+            ui.search.classList.add('hidden');
+            ui.results.classList.remove('hidden');
+
+            document.getElementById('thumbnail').src = data.thumbnail;
+            document.getElementById('videoTitle').innerText = data.title;
+            document.getElementById('videoDuration').innerText = formatDuration(data.duration);
+
+            setupTabsUI();
+            switchTab('video');
+        }
+
+        function setupTabsUI() {
+            ui.tabsContainer.innerHTML = `
+               <div class="flex items-center gap-2 bg-black/40 p-1.5 rounded-xl border border-white/5 w-fit backdrop-blur-md">
+                   <button id="tabVideo" onclick="switchTab('video')" class="px-6 py-2.5 rounded-lg text-sm font-bold transition-all flex items-center gap-2 border border-transparent">
+                       <i class="fa-solid fa-film"></i> Video (MP4)
+                   </button>
+                   <button id="tabAudio" onclick="switchTab('audio')" class="px-6 py-2.5 rounded-lg text-sm font-bold transition-all flex items-center gap-2 border border-transparent">
+                       <i class="fa-solid fa-music"></i> Audio (MP3)
+                   </button>
+               </div>
+           `;
+        }
+
+        function switchTab(tab) {
+            currentTab = tab;
+            const tabVideo = document.getElementById('tabVideo');
+            const tabAudio = document.getElementById('tabAudio');
+
+            // Styles
+            const activeClass = ['bg-indigo-600', 'text-white', 'shadow-lg', 'shadow-indigo-500/20', 'border-indigo-500/50'];
+            const inactiveClass = ['text-gray-400', 'hover:bg-white/5', 'hover:text-white', 'border-transparent'];
+
+            if (tab === 'video') {
+                tabVideo.classList.add(...activeClass);
+                tabVideo.classList.remove(...inactiveClass);
+                tabAudio.classList.remove(...activeClass);
+                tabAudio.classList.add(...inactiveClass);
+                renderGrid(currentData.videos);
+            } else {
+                tabAudio.classList.add(...activeClass);
+                tabAudio.classList.remove(...inactiveClass);
+                tabVideo.classList.remove(...activeClass);
+                tabVideo.classList.add(...inactiveClass);
+                renderGrid(currentData.audios);
+            }
+        }
+
+        function renderGrid(items) {
+            ui.grid.innerHTML = '';
+
+            if (!items || items.length === 0) {
+                ui.grid.innerHTML = `
+                <div class="col-span-2 flex flex-col items-center justify-center py-12 text-gray-500 opacity-50 border border-dashed border-gray-700 rounded-xl">
+                    <i class="fa-solid fa-ban text-3xl mb-2"></i>
+                    <span class="font-mono text-sm">NO STREAMS AVAILABLE FOR THIS MODE</span>
+                </div>`;
+                return;
+            }
+
+            // Find best item (first item for video usually)
+            const bestItem = items[0];
+
+            items.forEach((f) => {
+                const isVideoMode = currentTab === 'video';
+                const isBest = f === bestItem && isVideoMode;
+                const icon = isVideoMode ? 'fa-film' : 'fa-music';
+                const colorClass = isVideoMode ? 'text-white' : 'text-indigo-300';
+
+                const card = document.createElement('div');
+                card.className = `format-card p-4 rounded-xl cursor-pointer relative group border-white/5 bg-white/5 mb-0`; // mb removed for gap grid
+                card.onclick = () => selectFormat(f, card);
+
+                // Badge Logic
+                let badge = isBest ? `<span class="absolute top-2 right-2 text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 px-2 py-0.5 rounded font-bold tracking-wider shadow-[0_0_10px_rgba(16,185,129,0.2)]">RECOMMENDED</span>` : '';
+
+                card.innerHTML = `
+                    ${badge}
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-lg bg-black/40 border border-white/5 flex items-center justify-center text-xl ${isVideoMode ? 'text-emerald-400' : 'text-indigo-400'}">
+                            <i class="fa-solid ${icon}"></i>
+                        </div>
+                        <div>
+                            <div class="font-bold text-lg ${colorClass} tracking-tight">${f.resolution}</div>
+                            <div class="text-xs text-gray-500 font-mono font-bold mt-0.5 flex items-center gap-2">
+                                <span class="text-gray-400 bg-white/5 px-1.5 rounded">${f.extension.toUpperCase()}</span> 
+                                <span class="w-1 h-1 rounded-full bg-gray-600"></span>
+                                <span class="${isVideoMode ? 'text-emerald-500/80' : 'text-indigo-500/80'}">${f.filesize_str}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                ui.grid.appendChild(card);
+            });
+        }
+
+        function selectFormat(format, cardElem) {
+            selectedFormatId = format.format_id;
+
+            // Visual selection
+            document.querySelectorAll('.format-card').forEach(c => c.classList.remove('selected', 'border-indigo-500', 'bg-indigo-500/10'));
+            cardElem.classList.add('selected', 'border-indigo-500', 'bg-indigo-500/10');
+
+            // Update Panel
+            const isVideo = currentTab === 'video';
+            ui.selLabel.innerText = format.resolution;
+            ui.selSize.innerText = `${format.filesize_str} • ${isVideo ? 'Video' : 'Audio'}`;
+            ui.selExt.innerText = format.extension.toUpperCase();
+
+            // Enable Button
+            ui.dlBtn.disabled = false;
+            ui.dlBtn.classList.remove('bg-gray-800', 'text-gray-500', 'cursor-not-allowed');
+            ui.dlBtn.classList.add('bg-white', 'text-white', 'cursor-pointer');
+        }
+
+        async function executeDownload() {
+            if (!selectedFormatId) return;
+
+            ui.dlBtn.disabled = true;
+            ui.dlBtn.classList.add('cursor-not-allowed');
+            const originalText = document.getElementById('btnText').innerText;
+            document.getElementById('btnText').innerText = "DOWNLOADING...";
+
+            ui.loading.classList.remove('hidden');
+            ui.loading.style.position = 'fixed';
+            ui.loading.style.zIndex = '999';
+            ui.loading.style.top = '50%';
+            ui.loading.style.left = '50%';
+            ui.loading.style.transform = 'translate(-50%, -50%)';
+            document.getElementById('loadingText').innerText = "Processing Data Stream...";
+            ui.results.classList.add('blur-sm');
+
+            try {
+                const res = await fetch(`/download-selected?url=${encodeURIComponent(currentUrl)}&format_id=${encodeURIComponent(selectedFormatId)}`);
+                if (!res.ok) throw await res.json();
+
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+
+                const disposition = res.headers.get('Content-Disposition');
+                let filename = "download.mp4";
+                if (disposition && disposition.includes('filename=')) {
+                    filename = disposition.split('filename=')[1].replace(/['"]/g, '');
+                }
+                a.download = filename;
+
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+
+                // Reset UI
+                ui.results.classList.remove('blur-sm');
+                ui.loading.classList.add('hidden');
+                ui.loading.style = '';
+                document.getElementById('btnText').innerText = "COMPLETE";
+
+                setTimeout(() => {
+                    document.getElementById('btnText').innerText = originalText;
+                    ui.dlBtn.disabled = false;
+                    ui.dlBtn.classList.remove('cursor-not-allowed');
+                }, 2000);
+
+            } catch (e) {
+                console.error(e);
+                ui.results.classList.remove('blur-sm');
+                ui.loading.classList.add('hidden');
+                ui.loading.style = '';
+                showError(e.detail || "Download failed.");
+                ui.dlBtn.disabled = false;
+                ui.dlBtn.classList.remove('cursor-not-allowed');
+                document.getElementById('btnText').innerText = originalText;
+            }
+        }
+
+        // Helpers
+        function setLoading(active, text) {
+            if (active) {
+                ui.search.classList.add('hidden');
+                ui.results.classList.add('hidden');
+                ui.loading.classList.remove('hidden');
+                document.getElementById('loadingText').innerText = text;
+            } else {
+                ui.loading.classList.add('hidden');
+            }
+        }
+
+        function reset() {
+            ui.results.classList.add('hidden');
+            ui.search.classList.remove('hidden');
+            ui.input.value = '';
+            ui.error.classList.add('translate-y-20', 'opacity-0');
+        }
+
+        function showError(msg) {
+            ui.error.querySelector('#errorMsg').innerText = msg;
+            ui.error.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                ui.error.classList.add('translate-y-20', 'opacity-0');
+            }, 5000);
+        }
+
+        function hidError() {
+            ui.error.classList.add('translate-y-20', 'opacity-0');
+        }
+
+        function formatDuration(seconds) {
+            if (!seconds) return "Unknown";
+            const min = Math.floor(seconds / 60);
+            const sec = seconds % 60;
+            return `${min}:${sec.toString().padStart(2, '0')}`;
+        }
+
+        function addToHistory(data) {
+            const item = `
+                <div class="min-w-[200px] glass-panel p-3 rounded-lg flex gap-3 items-center border border-white/5 cursor-pointer hover:bg-white/5 transition-colors" onclick="loadHistoryItem('${data.url}')">
+                    <img src="${data.thumbnail}" class="w-10 h-10 rounded object-cover">
+                    <div class="overflow-hidden">
+                        <div class="text-xs font-bold text-white truncate w-24">${data.title}</div>
+                        <div class="text-[10px] text-gray-500">${new Date().toLocaleTimeString()}</div>
+                    </div>
+                </div>
+             `;
+            if (ui.history.innerText.includes("No downloads in this session")) ui.history.innerHTML = '';
+            ui.history.insertAdjacentHTML('afterbegin', item);
+        }
+
+        function loadHistoryItem(url) {
+            ui.input.value = url;
+            analyzeUrl();
+        }
+    </script>
+</body>
+
+</html>

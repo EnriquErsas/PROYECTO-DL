@@ -1,0 +1,7 @@
+__pycache__
+venv
+.git
+.env
+downloads/*
+!downloads/.gitkeep
+*.pyc
