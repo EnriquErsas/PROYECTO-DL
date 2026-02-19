@@ -278,6 +278,15 @@ def analyze_video(url: str):
         for fmt in raw_formats[:10]:
             print(f"  Format: {fmt.get('format_id')} | {fmt.get('height')}p | vcodec={fmt.get('vcodec')} | acodec={fmt.get('acodec')} | ext={fmt.get('ext')}")
 
+        # Calcular tamaño del mejor audio m4a (se descarga siempre junto al video)
+        best_audio_for_video = next(
+            (f for f in raw_formats if f.get('vcodec') == 'none' and f.get('ext') == 'm4a'),
+            next((f for f in raw_formats if f.get('vcodec') == 'none'), None)
+        )
+        audio_size_bytes = 0
+        if best_audio_for_video:
+            audio_size_bytes = best_audio_for_video.get('filesize') or best_audio_for_video.get('filesize_approx') or 0
+
         for f in raw_formats:
             if not f: continue
 
@@ -286,14 +295,16 @@ def analyze_video(url: str):
             acodec = f.get('acodec', 'none')
             is_video = vcodec != 'none'
 
-            filesize = f.get('filesize') or f.get('filesize_approx')
-            size_str = format_size(filesize)
-
             if is_video:
                 height = f.get('height')
                 if not height: continue
 
                 resolution_key = f"{height}p"
+
+                # Tamaño real = video + audio (porque siempre se descargan y fusionan)
+                video_size = f.get('filesize') or f.get('filesize_approx') or 0
+                total_size = video_size + audio_size_bytes
+                size_str = format_size(total_size) if total_size > 0 else "N/A"
 
                 video_formats.append({
                     "format_id": format_id,
