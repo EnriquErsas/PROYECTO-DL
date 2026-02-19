@@ -29,20 +29,27 @@ DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
 templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
 
 # --- SISTEMA DE COOKIES PARA YOUTUBE ---
-# En Railway: Settings > Variables > YOUTUBE_COOKIES = <contenido del cookies.txt>
+# Prioridad 1: Archivo COOKIES.txt en la carpeta del proyecto (subido directamente al repo)
+# Prioridad 2: Variable de entorno YOUTUBE_COOKIES (para Railway/HF secrets)
 YOUTUBE_COOKIES_FILE = None
-_cookies_content = os.environ.get('YOUTUBE_COOKIES', '')
-if _cookies_content.strip():
-    try:
-        _tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8')
-        _tmp.write(_cookies_content)
-        _tmp.close()
-        YOUTUBE_COOKIES_FILE = _tmp.name
-        print(f"[INFO] Cookies de YouTube cargadas desde variable de entorno -> {YOUTUBE_COOKIES_FILE}")
-    except Exception as _e:
-        print(f"[WARN] No se pudo escribir cookies.txt: {_e}")
+
+_local_cookies = BASE_DIR / "COOKIES.txt"
+if _local_cookies.exists():
+    YOUTUBE_COOKIES_FILE = str(_local_cookies)
+    print(f"[INFO] Cookies cargadas desde archivo local: {YOUTUBE_COOKIES_FILE}")
 else:
-    print("[INFO] No se encontraron YOUTUBE_COOKIES en variables de entorno.")
+    _cookies_content = os.environ.get('YOUTUBE_COOKIES', '')
+    if _cookies_content.strip():
+        try:
+            _tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8')
+            _tmp.write(_cookies_content)
+            _tmp.close()
+            YOUTUBE_COOKIES_FILE = _tmp.name
+            print(f"[INFO] Cookies cargadas desde variable de entorno -> {YOUTUBE_COOKIES_FILE}")
+        except Exception as _e:
+            print(f"[WARN] No se pudo escribir cookies.txt desde env: {_e}")
+    else:
+        print("[WARN] Sin cookies - YouTube puede bloquear en IPs de servidor.")
 
 # --- CONFIGURACIÓN DE VIDEO EXTRACTOR ---
 
